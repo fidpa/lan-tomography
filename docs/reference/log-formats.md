@@ -16,7 +16,7 @@ recorded came from misreading a format, not from misreading a network.
 - Daily files roll over at local midnight. Completed days are compressed with
   zstd and keep their name plus `.zst`.
 - Reading tools must handle `.log` and `.log.zst` transparently. See
-  `log_files()` and `read_log()` in `src/analyze/correlate.py` — a plain
+  `log_files()` and `read_log()` in `src/analyze/correlate.py`. A plain
   `glob("*.log")` skips archived days **silently**, and the analysis then runs
   on less data with no error and no exit code.
 
@@ -41,7 +41,7 @@ PING 192.0.2.1 (192.0.2.1) 56(84) bytes of data.
 | Element | Meaning |
 |---|---|
 | `[…]` | Unix epoch with microseconds, from `ping -D` |
-| `icmp_seq=N` | 16-bit sequence number — **wraps**, see below |
+| `icmp_seq=N` | 16-bit sequence number; **wraps**, see below |
 | `time=… ms` | round-trip time; its presence means the line is a reply |
 | `no answer yet for icmp_seq=N` | from `ping -O`. **Neither a reply nor a loss** |
 | `Destination Host Unreachable` | carries its own `icmp_seq` |
@@ -54,8 +54,8 @@ arrives. A sequence number counts as lost only if **no** reply line for it
 exists anywhere in the window.
 
 Both readings have caused errors, in opposite directions. Counting these lines
-as loss invents outages. Counting them as replies — the line does contain
-`icmp_seq=`, after all — produces a smooth answer density and a healthy-looking
+as loss invents outages. Counting them as replies (the line does contain
+`icmp_seq=`, after all) produces a smooth answer density and a healthy-looking
 network; the real loss in that case was 9 to 21 percent.
 
 **2. `icmp_seq` wraps after 3 h 38 min** at five packets a second (16 bit,
@@ -71,7 +71,7 @@ it is a process event, not a network event.
 The counter-check for rule 3: a genuine outage leaves `no answer yet` lines
 **without** a start marker between them. A restart leaves a marker and no such
 lines. This rule was itself once over-applied, discarding real outages that
-happened to sit near a restart — which is why the counter-check is written down
+happened to sit near a restart, which is why the counter-check is written down
 here rather than left to judgement.
 
 ---
@@ -102,7 +102,7 @@ Written by `src/probes/pktrate.sh`. Read by `src/analyze/pktrate-scan.py`.
 | `drop` / `err` / `missed` | `rx_dropped`, `rx_errors`, `rx_missed_errors` |
 
 Values are **deltas per interval**, not rates. Divide by `LT_PKTRATE_INTERVAL`
-for frames per second. A negative delta — a counter reset on link-down — is
+for frames per second. A negative delta, a counter reset on link-down, is
 written as `0` rather than a phantom spike.
 
 ### The three ways this file gets misread
@@ -110,7 +110,7 @@ written as `0` rather than a phantom spike.
 **The timestamp is in square brackets.** In awk, `[1786201899.326]` in
 arithmetic context evaluates to **0**, silently. No error, no warning. A whole
 measurement day once collapsed into a single hour that way, and the resulting
-table looked perfectly plausible — because it had one row.
+table looked perfectly plausible, because it had one row.
 
 ```awk
 { gsub(/[][]/, "", $1); ... }      # always, before any arithmetic
@@ -121,7 +121,7 @@ means brackets.
 
 **The timestamp is the END of the interval.** Treating it as the start shifts
 every sample by one interval. In one analysis that shift turned a duplication
-factor of 53.5 into 1.00 — that is, "there is a loop" into "there is no loop".
+factor of 53.5 into 1.00, that is, "there is a loop" into "there is no loop".
 
 **The columns are easy to swap.** In awk the fields are `$2 $3 $4` after
 stripping the brackets; in a Python split they are `[1] [2] [3]`. Getting
@@ -138,7 +138,7 @@ if it fails, every number derived from the file is suspect.
 
 ---
 
-## Symptom windows — `waves.csv`
+## Symptom windows: `waves.csv`
 
 `<base>/waves.csv`
 
@@ -169,7 +169,7 @@ Rows that cannot be parsed are skipped rather than aborting the run.
 
 Whatever records your symptom. Some sources that work:
 
-- Any timestamped log — `src/analyze/waves-from-log.py` turns one into
+- Any timestamped log. `src/analyze/waves-from-log.py` turns one into
   waves.csv given a regex and a timestamp format. Standard library only.
 - A VPN or remote-access gateway's session log.
 - Application error logs, grouped by minute.
@@ -207,7 +207,7 @@ One JSON object per line, written by `src/switch/switch-probe.py`.
 | `ports.*.d` | **deltas** since the previous sample |
 | `ports.*.dt` | seconds the deltas cover |
 
-A delta of `null` means the counter went backwards — a wrap or a switch reboot.
+A delta of `null` means the counter went backwards, from a wrap or a switch reboot.
 That is deliberately **not** `0`: "unknown" and "nothing happened" are different
 statements, and this whole toolkit turns on keeping them apart.
 
@@ -215,7 +215,7 @@ Ports with no link and no counter movement are omitted to keep the file half
 the size. A port gaining link appears on its own.
 
 **A quiet timeline is not an all-clear.** SNMP counters were blind for 12 of 18
-flood minutes in one measured case — the agent stopped answering while the
+flood minutes in one measured case: the agent stopped answering while the
 device was busy, and the gaps were not random (p = 2.8e-14 against the flood
 windows). The device stops reporting precisely when there is something to
 report. Check `interval_s` for gaps before concluding anything from silence.
@@ -260,7 +260,7 @@ Written by `src/probes/tcp-probe.py`.
 [1786201929.940000] connect 192.0.2.20:9 failed err=refused
 ```
 
-`err=refused` is a fast, clean answer from a live host — a stopped service, not
+`err=refused` is a fast, clean answer from a live host: a stopped service, not
 a network fault. Folding it in with `timeout` turns a stopped service into a
 phantom outage.
 
@@ -268,8 +268,8 @@ phantom outage.
 
 ## Layer-2 capture
 
-`<base>/l2/l2-events-<YYYY-MM-DD>.log` — plain text, STP only
-`<base>/l2/l2.pcap*` — ring buffer, STP and ARP
+`<base>/l2/l2-events-<YYYY-MM-DD>.log`, plain text, STP only
+`<base>/l2/l2.pcap*`, ring buffer, STP and ARP
 
 The text log is `tcpdump -n -l -tttt` output. Note that `-tttt` writes **local
 time without an offset**: the line claims a timezone the reader cannot
@@ -281,8 +281,8 @@ each symptom window and prints them under the verdict. A path rebuilt at the
 second sessions tore down is a different statement from a path that merely lost
 packets, and it is the reason the capture exists.
 
-It looks for `l2/` **beside the data directory** — the same coupling the target
-matrix follows — so a probe's captures are read with that probe's ping logs and
+It looks for `l2/` **beside the data directory**, the same coupling the target
+matrix follows, so a probe's captures are read with that probe's ping logs and
 not with another machine's. `--l2-dir` overrides.
 
 A window with no lines at all reports `NO DATA`, never "no topology changes":
@@ -290,7 +290,7 @@ the daily file is opened at midnight, so its existence says nothing about
 whether the capture was still running by the time your window came round. See
 [pitfall E7](../explanation/pitfalls.md#e7-a-capture-file-that-exists-is-not-a-capture-that-ran).
 
-The capture filters are narrow on purpose — a wide filter on a busy LAN fills a
+The capture filters are narrow on purpose: a wide filter on a busy LAN fills a
 disk and collects user payloads. The cost is that **broadcast floods, multicast
 storms and unknown-unicast flooding are invisible here.** Use the packet-rate
 log for those. In the case this toolkit came from, the decisive event was a

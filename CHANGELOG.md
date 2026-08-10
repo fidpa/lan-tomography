@@ -23,6 +23,53 @@ network, and one network is not enough to call an interface settled.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-08-10
+
+Documentation only. Three numbers that were wrong, two dependencies that were
+never listed, and a badge that asserted a test result nothing verified. Also a
+typographic pass: the em dashes are gone from every document except this one.
+
+### Fixed
+
+- **The pitfall count in the documentation table still said 44.** It was raised
+  to 46 in the feature list for 0.2.0 and missed one line further down, so the
+  same page carried both numbers. Measured again: `docs/explanation/pitfalls.md`
+  has **46** entries, **19** of which name a test, with 34 references to 33
+  distinct test names, all of them resolving.
+- **"a ~70-line BER client" was a number with no origin.** Measured:
+  `src/lib/snmp.py` is 274 lines, **135 of them code**, of which **62** are the
+  BER encoder and decoder. The claim attributed the whole SNMP client to the
+  size of its codec. It now states both figures in the same unit.
+- **`ssh`, `rsync` and `flock` were used but never listed as requirements.**
+  `src/ops/sync-node.sh` needs the first two to pull a probe's data and its
+  matrix, `src/events/liveness-check.sh` needs `ssh` to see a remote unit, and
+  `src/ops/compress-logs.sh` and `src/events/flood-capture.sh` lock with
+  `flock`. The omission mattered most for multi-probe operation, which is the
+  premise the whole method rests on. A single-probe measurement needs none of
+  the three, and the requirement list now says so.
+
+### Changed
+
+- **The static ShellCheck badge is gone.** It was
+  `img.shields.io/badge/ShellCheck-passing`, a hardcoded string that stays green
+  whatever the linter does, next to a CI badge that reads the actual run. Two
+  statements about one check, one of them unverifiable. `ci.yml` has a
+  `ShellCheck` job, so the CI badge already covers it. The remaining badges
+  assert properties rather than results, and those were checked too: Python
+  3.11+ is forced by `from datetime import UTC`, Bash 4.0+ by `declare -A` and
+  `mapfile`.
+- **The README no longer restates the 1.0.0 promise.** It said the same thing as
+  the head of this file and would have had to be kept in step with it. The
+  commitment is unchanged and lives here.
+- **Em dashes removed from every document except this changelog.** 220 of them
+  across 13 files, rewritten rather than substituted: a dash that carried an
+  explanation became a colon, one that carried an afterthought a comma or a full
+  stop, and a pair enclosing an aside became parentheses. Two headings changed
+  with them, so the anchors were re-checked: 17 documents, 34 anchor links, none
+  dead and none unreachable. This file keeps its own, because its version
+  headings are the format `release.yml` cuts on and its released sections are
+  byte-frozen as published release notes.
+
 ## [0.2.0] — 2026-08-10
 
 The four findings from the same review that 0.1.1 left alone, because each of
@@ -378,7 +425,8 @@ become individually determinable, instead of collecting targets by gut feeling.
   generated from commit messages. Two gates come with it: the workflow fails if
   the section is missing or empty, and if the tag does not match `VERSION`.
 
-[Unreleased]: https://github.com/fidpa/lan-tomography/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/fidpa/lan-tomography/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.1
 [0.2.0]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.0
 [0.1.1]: https://github.com/fidpa/lan-tomography/releases/tag/v0.1.1
 [0.1.0]: https://github.com/fidpa/lan-tomography/releases/tag/v0.1.0

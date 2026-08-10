@@ -21,26 +21,26 @@
 If you are here because something is intermittently broken and the usual tools
 have not narrowed it down:
 
-1. **[The method](explanation/target-matrix.md)** — how to choose probe
+1. **[The method](explanation/target-matrix.md).** How to choose probe
    locations and target roles so the sections you care about become
    individually determinable. Read this before installing anything; the
    installation is the easy part and the matrix is where the thinking is.
-2. **[Pitfalls](explanation/pitfalls.md)** — the core of this repository.
+2. **[Pitfalls](explanation/pitfalls.md).** The core of this repository.
    Around forty ways these measurements produce confident wrong answers.
    Skimming it now saves more time than reading it later.
-3. **[Getting started](tutorial/getting-started.md)** — a first measurement on
+3. **[Getting started](tutorial/getting-started.md).** A first measurement on
    one probe.
-4. **[Log formats](reference/log-formats.md)** — needed as soon as you want to
+4. **[Log formats](reference/log-formats.md).** Needed as soon as you want to
    check a result by hand, which you should.
 
 ## The shape of this documentation
 
 Following [Diátaxis](https://diataxis.fr/):
 
-- **tutorial/** — learning by doing, start to finish, one path
-- **how-to/** — a specific task, assuming you know why
-- **reference/** — formats, options, defaults; look things up
-- **explanation/** — why the tools are shaped this way, and what goes wrong
+- **tutorial/**: learning by doing, start to finish, one path
+- **how-to/**: a specific task, assuming you know why
+- **reference/**: formats, options, defaults; look things up
+- **explanation/**: why the tools are shaped this way, and what goes wrong
 
 The explanation section is unusually large for a toolkit this size. That is
 deliberate: the code here is not hard, and reproducing it is not the obstacle.

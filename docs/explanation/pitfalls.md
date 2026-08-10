@@ -2,7 +2,7 @@
 
 Measurements that look plausible and are wrong.
 
-This is the core of this repository. The tools are ordinary — ping loops, an
+This is the core of this repository. The tools are ordinary: ping loops, an
 SNMP poller, some parsing. What is hard to come by is this list, because every
 entry cost somebody hours, and several of them produced a confident statement
 that was later withdrawn.
@@ -31,7 +31,7 @@ against a median of 0.7 ms, purely from its own port. Everything it said about
 ### A2. An outage on *all* targets is the probe
 
 If every target fails at the same second, the common element is not the
-network — it is the machine doing the measuring, or its uplink. Check the
+network. It is the machine doing the measuring, or its uplink. Check the
 probe's own load, its interface counters and its uplink before anything else.
 
 This is also why a single probe cannot localise anything. Two probes that
@@ -85,7 +85,7 @@ Each `# ---- measurement starts` line is a fresh ping process with a fresh
 counter. The gap either side is a process event.
 
 **This rule was itself over-applied**, discarding real outages that happened to
-sit near a restart — a second-order pitfall, and the reason the counter-check
+sit near a restart. That is a second-order pitfall, and the reason the counter-check
 is written down: a genuine outage leaves `no answer yet` lines *without* a
 start marker between them.
 
@@ -96,7 +96,7 @@ overnight analysis reports a total outage and skews the verdict.
 
 The other half of the same rule matters just as much: this excuse applies
 **only** to roles that are allowed to be off. A server silent for a whole
-window *is* a total outage — excusing it lets the worst possible failure
+window *is* a total outage, and excusing it lets the worst possible failure
 produce a clean verdict.
 
 *Tests: `permanently_silent_target_counts_as_offline`, `offline_still_counts_against_a_server_role`*
@@ -110,7 +110,7 @@ notices. Measure the **longest uninterrupted run**, not the total.
 
 ### B6. When ping goes silent entirely there is nothing to count
 
-The worst outages leave no lines at all — no replies, no `no answer yet`,
+The worst outages leave no lines at all: no replies, no `no answer yet`,
 nothing. Sequence analysis finds nothing because there is nothing. Only the
 **distance between two consecutive lines** finds it.
 
@@ -119,7 +119,7 @@ metric reported a clean window.
 
 *Test: `gap_with_no_lines_at_all_is_found_on_the_time_axis`*
 
-### B7. Unreachable lines carry a sequence number — parse it
+### B7. Unreachable lines carry a sequence number, so parse it
 
 `From 192.0.2.1 icmp_seq=7 Destination Host Unreachable`. Drop the number and
 a whole unreachable phase collapses into one pseudo-loss, landing below the
@@ -138,7 +138,7 @@ data" is not one.** Every analysis function here returns `None`, never `0`.
 ### B9. Compressed archive days are skipped silently
 
 `glob("*.log")` does not match `*.log.zst`. The analysis runs on less data,
-with no error and no exit code — it just quietly considers fewer days.
+with no error and no exit code. It just quietly considers fewer days.
 
 And the reverse: a probe mirrored with `rsync` without `--delete` returns an
 uncompressed copy of a day that was already archived, so the same day sits
@@ -155,7 +155,7 @@ there twice and gets counted twice.
 `[1786201899.326]` in awk arithmetic evaluates to **0**. Silently. No error.
 
 A whole measurement day once collapsed into a single hour this way, and the
-table looked entirely plausible — it had one row, and one row does not look
+table looked entirely plausible: it had one row, and one row does not look
 wrong.
 
 ```awk
@@ -169,7 +169,7 @@ Counter-check: a full day must produce **24 hourly buckets**.
 ### C2. The timestamp is the END of the interval
 
 Treating it as the start shifts every sample by one interval. That shift once
-turned a duplication factor of **53.5 into 1.00** — "there is a loop" into
+turned a duplication factor of **53.5 into 1.00**, "there is a loop" into
 "there is no loop".
 
 *Test: `timestamp_is_the_end_of_the_interval`*
@@ -178,7 +178,7 @@ turned a duplication factor of **53.5 into 1.00** — "there is a loop" into
 
 `uni bcast mcast rx tx drop err missed`. In awk they are `$2 $3 $4`; in a
 Python split `[1] [2] [3]`. Swapping broadcast and multicast produces confident
-wrong numbers with nothing visibly amiss — in one case two of them went into an
+wrong numbers with nothing visibly amiss. In one case two of them went into an
 email to the service provider.
 
 One line settles it:
@@ -208,7 +208,7 @@ inflated number reached a report.
 
 Realtek reports `unicast:` / `broadcast:` / `multicast:`; Intel reports
 `rx_broadcast:` / `rx_multicast:` and **no unicast at all**. A parser knowing
-one scheme writes zeros on the other machine — silently. A measurement outage
+one scheme writes zeros on the other machine, silently. A measurement outage
 that looks exactly like "no flood", which is the worst failure this repository
 has: not an error, but a confident negative.
 
@@ -230,14 +230,14 @@ discards replies **while forwarding traffic perfectly**.
 Measured: switch targets produced apparent outages up to **24 seconds** while
 every target *behind* the same switch stayed clean in the same window, and
 other probes saw the same switch answering normally. Three probes at 5
-packets/s each is 15 packets/s arriving at a CPU not built for it — the
+packets/s each is 15 packets/s arriving at a CPU not built for it: the
 measurement was measuring itself.
 
 The tell is scatter: 1.6–5.5 ms to the switch, 0.6 ms to ordinary hosts in the
 same segment.
 
-Keep these targets — they raise the rank of the matrix and they are how you see
-the switch at all — but never let one carry a verdict.
+Keep these targets, because they raise the rank of the matrix and are how you
+see the switch at all, but never let one carry a verdict.
 
 *Test: `outage_in_an_unjudged_role_is_not_reported_as_clean`*
 
@@ -260,7 +260,7 @@ hour. Only the **difference between two samples** is a finding.
 ### D4. Zero errors and huge discards is a finding, not a contradiction
 
 `ifInErrors = 0` across every interface for three weeks means the cabling is
-fine. `ifOutDiscards` in the millions on one port means send-queue overruns —
+fine. `ifOutDiscards` in the millions on one port means send-queue overruns:
 loss without a link failure, without an event-log entry, and without a ping
 matrix necessarily seeing anything. They are different mechanisms and the pair
 is informative.
@@ -268,7 +268,7 @@ is informative.
 ### D5. A MAC at the return port accuses nobody
 
 While a loop is running, the switch learns **every** sender's MAC on the return
-port — including the measuring machine's own. A MAC appearing there is a
+port, including the measuring machine's own. A MAC appearing there is a
 passenger.
 
 ### D6. Never infer identity from the OUI
@@ -315,7 +315,7 @@ frame can be captured and still never reach the wire.
 A ring capture writes a fixed number of files and overwrites the oldest. The
 rotation is not aware of your incident: in the case this came from it fell at
 20:02:36, inside an event that began at 20:02:32. Keeping only the current file
-preserved the flood and lost the four seconds before it — which is where the
+preserved the flood and lost the four seconds before it, which is where the
 precursor was.
 
 Always keep the current file **and the one before it**. `flood-capture.sh` does
@@ -334,7 +334,7 @@ worthless.
 
 The daily `l2-events-<date>.log` is opened at midnight, so it exists for the
 whole day from its first second. A capture that dies at 09:00 leaves behind a
-file that is indistinguishable, by its presence, from a quiet day — and quiet
+file that is indistinguishable, by its presence, from a quiet day. And quiet
 is what "no topology change in the window" means to a reader.
 
 This is [B8](#b8-a-missing-file-is-not-zero-loss) one layer down, and it is
@@ -344,12 +344,12 @@ the file is present and the honest answer still has to be "no data".
 Coverage has to come from the **lines**, not the file: with an `stp` filter a
 live capture writes a BPDU every two seconds, so a window containing no lines
 at all is a window with no capture. `correlate.py` distinguishes all three
-states — `None` for uncovered, an empty result for "the capture ran and the
+states: `None` for uncovered, an empty result for "the capture ran and the
 topology held", and the matching lines otherwise.
 
 One more, when the lines are there: the topology-change flag stays set for the
 length of the TC-while timer, so a single change produces a **run** of flagged
-hellos. Counting lines counts BPDUs, not events — which is why the lines
+hellos. Counting lines counts BPDUs, not events, which is why the lines
 themselves are printed underneath the count.
 
 *Tests: `window_without_l2_lines_yields_none_not_zero_changes`,
@@ -391,11 +391,11 @@ There are two ways to arrive at that contradiction, and the second is much
 easier to miss than the first:
 
 1. **Nothing with a judging role failed, but something else did.** The honest
-   output is "outage outside the judgement matrix" — `switch-ref`, `uplink-ref`
+   output is "outage outside the judgement matrix": `switch-ref`, `uplink-ref`
    and `wan-ref` deliberately carry no verdict, which is not the same as
    carrying a clean one.
 2. **The symptom host stayed reachable while a judging role failed hard.** The
-   symptom is genuinely not explained by the network — but the network was not
+   symptom is genuinely not explained by the network, but the network was not
    clean either. This one shipped as `NETWORK CLEAN` until 0.2.0 and was
    reproducible with this repository's own sample data: a 299-second gateway
    outage, printed in the table, under the word CLEAN. It now reads "outage
@@ -411,23 +411,23 @@ statements, and only one of them was measured.
 
 ### F4. Simultaneous interventions destroy attribution
 
-Four changes were made at once in the case this came from — a powered-off
+Four changes were made at once in the case this came from: a powered-off
 access point, firmware and meshing changes, a replaced cable and switch, and an
 ARP source that dried up. The symptom stopped. **Nothing was thereby proven.**
 
 If you must change several things at once, say so in the report, and keep the
-counter-test — restoring one variable — on the list.
+counter-test, restoring one variable, on the list.
 
 ### F5. Absence of the symptom is not a finding unless the chain was alive
 
 A dead probe produces silence. So does a fixed network. Confirm the measurement
 chain was alive for every quiet period you intend to cite, from something
-independent of the probes — see `src/events/liveness-check.sh`.
+independent of the probes. See `src/events/liveness-check.sh`.
 
 ### F6. Correlation across sources needs one clock
 
 Four sources logging in UTC while the analysis assumed local time cost two
-wrong conclusions in one day — in both directions. Once it produced "the source
+wrong conclusions in one day, in both directions. Once it produced "the source
 is silent" about a source that had been running the whole time and turned out
 to be the most informative one available.
 
@@ -435,7 +435,7 @@ to be the most informative one available.
 
 A device sending syslog without a timezone gets stamped with the *receiver's*
 zone. The line then claims an hour the device never meant. Four measurements
-gave 7206, 7217, 7218 and 7218 seconds of apparent drift — exactly 7200. A
+gave 7206, 7217, 7218 and 7218 seconds of apparent drift, exactly 7200. A
 clock that is genuinely wrong does not land on precisely two hours.
 
 ### F8. Keep withdrawn statements, with a note
@@ -448,17 +448,17 @@ still there, marked.
 
 The measurements and the matrix that says what they mean are collected in
 different places: the probe writes the logs, and the matrix belongs to the
-probe — but the analysis runs on the machine the data was pulled to, which has
+probe. But the analysis runs on the machine the data was pulled to, which has
 a matrix of its own.
 
 Analyse one probe's data against another probe's matrix and the output is
 wrong in **both** directions at once, silently. Labels only the remote matrix
-knows never appear at all — no row, no `NO DATA`, no exit code. Labels only the
+knows never appear at all: no row, no `NO DATA`, no exit code. Labels only the
 local one knows appear as measurement gaps for targets that were never
 measured.
 
 Measured: seven table rows became five, and the two that vanished were the two
-`uplink-ref` rows — the targets the second measurement point had been built
+`uplink-ref` rows, the targets the second measurement point had been built
 for. The table looked complete, because a table with five rows looks exactly
 like a table with five rows.
 
@@ -495,14 +495,14 @@ still *reaches* that window.
 
 ### G2. Transferring the log changes the network you are measuring
 
-These files run to hundreds of megabytes — 314 MB in the case this came from.
+These files run to hundreds of megabytes, 314 MB in the case this came from.
 Fetching one across the link under investigation is a sustained transfer over
 exactly the path whose behaviour is in question, and it competes with the
 traffic you are trying to characterise. See [A4](#a4-saturating-your-own-link-looks-exactly-like-a-network-fault):
 the resulting loss is indistinguishable from the fault.
 
 Read ranges instead. `smbclient get` cannot; SMB2 READ with an offset can, and
-the EVTX layout — a 4096-byte header, then independent 64 KB chunks — is built
+the EVTX layout (a 4096-byte header, then independent 64 KB chunks) is built
 for it. A dozen chunks answer "is this log worth fetching" for 768 KB.
 
 ### G3. Event-log timestamps are UTC; your capture timestamps are not
@@ -510,7 +510,7 @@ for it. A dozen chunks answer "is this log worth fetching" for 768 KB.
 EVTX stores UTC. `tcpdump -tttt` writes local time with no offset
 ([E3](#e3-tcpdump--tttt-writes-local-time-without-an-offset)). Putting the two
 side by side without converting produces a correlation that looks convincing
-and is off by the local UTC offset — an hour or two, which is wider than most
+and is off by the local UTC offset, an hour or two, which is wider than most
 of the events worth correlating.
 
 Convert at read time, to the same `LT_TZ` the probes use, and put the timezone
@@ -523,6 +523,6 @@ in the output header so the reader can see which one applied.
 ## Contributing a pitfall
 
 If a tool here led you to a confident, incorrect conclusion, that is the most
-valuable thing you can report — more than a crash. Include what the data looked
+valuable thing you can report, more than a crash. Include what the data looked
 like, what you concluded, what turned out to be true, and the cross-check that
 would have caught it. See [CONTRIBUTING.md](../../CONTRIBUTING.md).

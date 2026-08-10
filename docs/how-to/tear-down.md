@@ -20,8 +20,8 @@ sudo tar -C /var/log -czf ~/campaign-$(date +%F).tar.gz lan-tomography/
 ```
 
 Keep it as long as the conclusions are still being relied on. If findings went
-to anyone who will act on them — a service provider, your own management, a
-customer — the raw data is what supports them later.
+to anyone who will act on them (a service provider, your own management, a
+customer), the raw data is what supports them later.
 
 **Captures contain payloads.** Treat the archive as confidential, and check
 what your agreement with the network's owner says about retention before

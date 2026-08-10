@@ -8,7 +8,7 @@ method.
 
 Any Linux machine with a wired connection to the segment you want to see: a
 spare mini-PC, a Raspberry Pi, a virtual machine on a host in that segment. It
-must be **wired** — measuring a wireless client tells you about the wireless.
+must be **wired**: measuring a wireless client tells you about the wireless.
 
 ## Install
 
@@ -37,7 +37,7 @@ LT_TZ="UTC"              # MUST be identical across probes
 ```
 
 `LT_NODE_NAME` collisions make two probes overwrite each other's evidence.
-`LT_TZ` disagreements make correlation worthless — four sources disagreeing
+`LT_TZ` disagreements make correlation worthless. Four sources disagreeing
 about the timezone once cost two wrong conclusions in a single day.
 
 The target list can differ per probe, and usually should: a probe exists to see
@@ -81,7 +81,7 @@ no target matrix for --ping-dir /var/log/lan-tomography/probe2/ping
 ```
 
 That stop is the point. The target list *should* differ per probe, so the local
-matrix silently omits every target only this probe measures — seven rows became
+matrix silently omits every target only this probe measures: seven rows became
 five once, and the two that vanished were the reason the probe existed.
 
 ## Watch the chain, not just the probe
@@ -96,6 +96,6 @@ sudo systemctl enable --now lt-liveness-check.timer
 ```
 
 This is not optional. `systemd` cannot see a single dead ping loop inside
-`probe-node.sh` — the unit stays `active (running)` on the strength of its
+`probe-node.sh`; the unit stays `active (running)` on the strength of its
 capture while measuring nothing. That is how one probe's user path went
 unobserved for a day.

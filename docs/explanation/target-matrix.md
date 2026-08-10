@@ -43,7 +43,7 @@ Two quantities stayed indeterminable in the first configuration no matter how
 long the measurement ran. Nine days of data would not have fixed it; a
 different matrix did, in an afternoon.
 
-The move that changed it was adding a target that **terminates on a switch** —
+The move that changed it was adding a target that **terminates on a switch**:
 the switch's own management address. Until then every path ended at an endpoint,
 so the switch was only ever measurable together with the endpoint's own
 cabling, never by itself.
@@ -99,7 +99,7 @@ outage of *this* target rules in and rules out.
 | `fabric-ref` | An ordinary endpoint deep in the shared path, usually the gateway. Loss here is the shared path. |
 | `uplink-ref` | Reachable only across the uplink between segments. |
 | `client-path` | A workstation on the path users take. Allowed to be offline overnight. |
-| `switch-ref` | A switch's own management address. **Carries no verdict** — see below. |
+| `switch-ref` | A switch's own management address. **Carries no verdict**; see below. |
 | `wan-ref` | Beyond the gateway. Use **two**, at different operators. |
 
 ### Why `switch-ref` carries no verdict
@@ -118,8 +118,8 @@ itself.
 The visible tell is scatter: 1.6–5.5 ms to the switch against 0.6 ms to
 ordinary hosts in the same segment.
 
-So keep these targets — they raise the rank, and they are the only way to see
-the switch at all — but exclude them from the judgement. When only `switch-ref`
+So keep these targets, because they raise the rank and are the only way to see
+the switch at all, but exclude them from the judgement. When only `switch-ref`
 targets fail, `correlate.py` reports **"outage outside the judgement matrix"**
 rather than calling the network clean, because a clean verdict would contradict
 the table printed underneath it.
@@ -142,18 +142,18 @@ it has to survive being read on its own, without the table underneath it.
 | Verdict | What failed |
 |---|---|
 | `NETWORK CLEAN` | Nothing. No target had a contiguous outage over the threshold. |
-| `OUTAGE OUTSIDE THE SYMPTOM PATH` | Something with a judging role, but **not** the symptom host. The symptom is not explained — and the network was not clean. |
+| `OUTAGE OUTSIDE THE SYMPTOM PATH` | Something with a judging role, but **not** the symptom host. The symptom is not explained, and the network was not clean. |
 | `OUTAGE OUTSIDE THE JUDGEMENT MATRIX` | Only roles that carry no verdict (`switch-ref`, `uplink-ref`, `wan-ref`). The statement arises from the difference between probes, not from this window. |
-| `CLIENT PATH` | Workstations, while the servers held — between desk and server room. |
-| `FABRIC` | The symptom host together with targets on other hardware — switch, cabling, uplink. |
-| `HOST UPLINK` | The symptom host **and** its hypervisor — in front of the hypervisor. |
-| `HOST INTERNAL` | The symptom host and its sibling guests, hypervisor clean — inside the host. |
-| `GUEST SPECIFIC` | The symptom guest alone — its virtual NIC or queue. |
+| `CLIENT PATH` | Workstations, while the servers held: between desk and server room. |
+| `FABRIC` | The symptom host together with targets on other hardware: switch, cabling, uplink. |
+| `HOST UPLINK` | The symptom host **and** its hypervisor: the fault is in front of the hypervisor. |
+| `HOST INTERNAL` | The symptom host and its sibling guests, hypervisor clean: the fault is inside the host. |
+| `GUEST SPECIFIC` | The symptom guest alone: its virtual NIC or queue. |
 | `UNCLEAR` | No ping data for the window. Not a result. |
 
 Two of the nine say "something failed, but it does not explain the symptom",
 and both are deliberately worded so that neither can be misread as an
-all-clear. That distinction was bought the hard way — see
+all-clear. That distinction was bought the hard way; see
 [pitfalls F3](pitfalls.md#f3-a-verdict-must-never-contradict-its-own-table).
 
 ---
@@ -215,7 +215,7 @@ broadcast frames per 5 s, quiet maximum 243, storm peaks above 30,000. The
 ## What this method cannot do
 
 It localises **sections**, not devices. A verdict of `FABRIC` says the fault is
-in the shared path — not which port, and certainly not which device is at
+in the shared path, not which port, and certainly not which device is at
 fault. Going from a section to a device needs the switch's own data
 (`switch-probe.py`, `fdb-probe.py`), a capture, or somebody walking to the
 rack.

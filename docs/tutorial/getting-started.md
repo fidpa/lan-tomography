@@ -1,10 +1,10 @@
 # Getting started
 
 A first measurement on one machine, end to end, in about twenty minutes. No
-switch access needed, and nothing to install on the network equipment — whether
+switch access needed, and nothing to install on the network equipment, whether
 or not it is yours to install on.
 
-One probe cannot localise a fault — that needs at least two. But one probe
+One probe cannot localise a fault; that needs at least two. But one probe
 answers the first question worth asking: *is anything actually being lost?*
 
 ## 1. Get the tools
@@ -24,7 +24,7 @@ belong on this machine is a decision about the measurement.
 sudoedit /etc/lan-tomography/targets.conf
 ```
 
-Start with four targets. More is not better — see
+Start with four targets. More is not better: see
 [the method](../explanation/target-matrix.md).
 
 ```
@@ -50,8 +50,8 @@ sudo systemctl enable --now lt-ping@198.51.100.1.service
 sudo systemctl enable --now lt-pktrate.service
 ```
 
-Confirm it is alive — silence from a dead probe looks exactly like silence from
-a healthy network:
+Confirm it is alive, because silence from a dead probe looks exactly like
+silence from a healthy network:
 
 ```bash
 systemctl --failed
@@ -68,12 +68,12 @@ You should see lines with a `[unix.timestamp]` prefix and `time=… ms`.
     /var/log/lan-tomography/pktrate/*.log
 ```
 
-On a quiet network: some samples, no events. Note the numbers — that baseline is
+On a quiet network: some samples, no events. Note the numbers. That baseline is
 what you will derive your thresholds from, and it is worth a day of patience.
 
 ## 5. Analyse an incident
 
-When the symptom next occurs, write down when — to the minute — in
+When the symptom next occurs, write down when, to the minute, in
 `/var/log/lan-tomography/waves.csv`:
 
 ```csv
@@ -103,14 +103,14 @@ is needed: the generator lays a `targets.conf` beside the data, the way a probe
 directory carries one, and the analysis finds it there.
 
 Read the two `L2:` lines at the bottom of each window against each other. One
-says `NO DATA`, the other counts topology-change BPDUs — the sample capture
+says `NO DATA`, the other counts topology-change BPDUs. The sample capture
 starts on day 3 on purpose, because a window nobody captured must not read like
 a window in which nothing happened.
 
 ## Next
 
-- **[Pitfalls](../explanation/pitfalls.md)** — read this before drawing any
+- **[Pitfalls](../explanation/pitfalls.md).** Read this before drawing any
   conclusion. It is the reason this repository exists.
-- [The method](../explanation/target-matrix.md) — how to choose the second and
+- [The method](../explanation/target-matrix.md): how to choose the second and
   third probe so the results actually localise something.
 - [Deploy a probe node](../how-to/deploy-a-probe-node.md)

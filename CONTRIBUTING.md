@@ -11,7 +11,7 @@ participating you are expected to uphold it.
 ## 🎯 What is most welcome
 
 **A pitfall you hit.** The core of this repository is
-`docs/explanation/pitfalls.md` — measurements that look plausible and are wrong.
+`docs/explanation/pitfalls.md`, measurements that look plausible and are wrong.
 If a tool here led you to a confident, incorrect conclusion, that is the single
 most valuable thing you can report, more so than a crash. Please include:
 
@@ -23,7 +23,7 @@ most valuable thing you can report, more so than a crash. Please include:
 A pitfall report is a good issue even if you cannot supply a fix.
 
 **A method that did not work.** This project deliberately documents a circuit
-test that was retracted as unfit — it returned the same factor in event windows
+test that was retracted as unfit: it returned the same factor in event windows
 and in quiet windows, so its negative result meant *blind*, not *no loop*.
 Negative results about detection methods are in scope and will be kept.
 
@@ -71,7 +71,7 @@ pytest tests/ -v
 
 Open an issue with: what you ran, what you expected, what happened, and the
 relevant log excerpt. **Redact addresses, hostnames and MAC addresses** before
-pasting — see the note on sample data below.
+pasting; see the note on sample data below.
 
 ## 🔀 Pull Requests
 
@@ -85,7 +85,7 @@ pasting — see the note on sample data below.
 
 ### Bash
 
-- `set -uo pipefail`. **Not `-e`** — the measurement loops must survive a failing
+- `set -uo pipefail`. **Not `-e`**: the measurement loops must survive a failing
   probe rather than exit.
 - Every executable understands `--help`. The help text *is* the file's header
   comment, emitted by `lt_usage()`. Do not add a second copy: it will drift, and

@@ -38,10 +38,10 @@ properties worth stating plainly.
 | Boundary | Trust level |
 |---|---|
 | Local root on the probe host | trusted (capture, systemd units) |
-| The measured network | **untrusted** — it is the object under investigation |
+| The measured network | **untrusted**; it is the object under investigation |
 | SNMP community strings | secret; read-only access is sufficient and expected |
 | SMB credentials for `contrib/` tooling | secret; read-only access is sufficient |
-| Capture files under `LT_BASE_DIR` | **sensitive** — see below |
+| Capture files under `LT_BASE_DIR` | **sensitive**; see below |
 | systemd journal | trusted |
 
 The tools open **no inbound network ports**. They send ICMP echo requests, open

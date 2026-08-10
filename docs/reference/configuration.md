@@ -18,10 +18,10 @@ something in the unit takes precedence over the file.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `LT_BASE_DIR` | `/var/log/lan-tomography` | All measurement data. **Evidence, not logs** — a capture contains whatever crossed the wire. |
+| `LT_BASE_DIR` | `/var/log/lan-tomography` | All measurement data. **Evidence, not logs**: a capture contains whatever crossed the wire. |
 | `LT_LOG_FILE` | `$LT_BASE_DIR/lan-tomography.log` | Operational log only. Nothing parses it. |
 | `LT_CONFIG` | `<repo>/config/lan-tomography.conf` | |
-| `LT_TARGETS` | `<repo>/config/targets.conf` | Applies to **this** machine's data directory only. `correlate.py` takes a `targets.conf` beside the directory it is analysing in preference, and refuses to analyse a foreign one without a matrix — see below. |
+| `LT_TARGETS` | `<repo>/config/targets.conf` | Applies to **this** machine's data directory only. `correlate.py` takes a `targets.conf` beside the directory it is analysing in preference, and refuses to analyse a foreign one without a matrix. See below. |
 | `LT_TCP_TARGETS` | `<repo>/config/tcp-targets.conf` | |
 | `LT_SECRETS` | unset | `KEY=value` lines. Read line by line, **never sourced**. `chmod 600`, outside the repository. |
 
@@ -34,17 +34,17 @@ Derived and not settable individually: `LT_PING_DIR`, `LT_L2_DIR`,
 this order:
 
 1. `--targets` on the command line. Always wins.
-2. `targets.conf` **beside** the data directory — `<ping-dir>/../targets.conf`.
+2. `targets.conf` **beside** the data directory, at `<ping-dir>/../targets.conf`.
    `probe-node.sh` writes its own matrix into its base directory and
    `sync-node.sh` pulls it, so a synced probe carries one automatically.
-3. `LT_TARGETS`, or `<repo>/config/targets.conf` — but **only** for
+3. `LT_TARGETS`, or `<repo>/config/targets.conf`, but **only** for
    `$LT_BASE_DIR/ping`, the directory this installation itself describes.
    `LT_TARGETS` arrives from an `EnvironmentFile`; it is ambient, not a
    statement about somebody else's probe.
 4. Otherwise it stops, naming both remedies.
 
-The stop is deliberate. Target lists differ per probe — that is why a second
-probe exists — and applying the wrong one drops rows without a message and
+The stop is deliberate. Target lists differ per probe, which is why a second
+probe exists, and applying the wrong one drops rows without a message and
 without an exit code. See
 [pitfall F9](../explanation/pitfalls.md#f9-a-target-missing-from-the-matrix-is-missing-from-the-table-not-from-the-network).
 
@@ -57,7 +57,7 @@ Set by the library and not meant to be configured: `LT_VERSION` (read from
 
 > **`LT_LOG_FILE` under `ProtectSystem=strict`:** if the path is not in
 > `ReadWritePaths`, the write fails **silently**. The tool then looks healthy
-> and logs nothing. Export it before the tool sources the library —
+> and logs nothing. Export it before the tool sources the library;
 > `liveness-check.sh` shows the pattern.
 
 ## This probe
@@ -85,7 +85,7 @@ you set a retention.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `LT_PCAP_RETENTION_DAYS` | unset | Daily pcaps older than this are deleted. Unset means **keep everything** — a capture is evidence, and silently deleting evidence is worse than a full disk. Measure your volume first: the profiles differ by three orders of magnitude. |
+| `LT_PCAP_RETENTION_DAYS` | unset | Daily pcaps older than this are deleted. Unset means **keep everything**: a capture is evidence, and silently deleting evidence is worse than a full disk. Measure your volume first: the profiles differ by three orders of magnitude. |
 
 ## Keeping captures on an event
 
@@ -101,7 +101,7 @@ overwritten. Run it from a timer, every two minutes.
 | `LT_PRECURSOR_FILTER` | `ether proto 0x890d` | BPF filter used when reading it. |
 | `LT_PRECURSOR_GROUP_S` | `300` | Collapse a burst of precursor frames into one event. |
 
-## Thresholds — derive these, do not copy them
+## Thresholds: derive these, do not copy them
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -130,11 +130,11 @@ Used by `evtx-peek.py`, the one tool here with third-party dependencies
 | `LT_SMB_HOST` | unset | Host to read event logs from. `--host` overrides. Exits 2 without either. |
 | `LT_SMB_DOMAIN` | empty | Domain or workgroup. Empty means a local account. |
 | `LT_SMB_USER` | unset | From the environment or `LT_SECRETS`. |
-| `LT_SMB_PASSWORD` | unset | **`LT_SECRETS` only, in practice** — reading `C$` needs a privileged account, and an environment variable is visible to anything that can read `/proc`. |
+| `LT_SMB_PASSWORD` | unset | **`LT_SECRETS` only, in practice**: reading `C$` needs a privileged account, and an environment variable is visible to anything that can read `/proc`. |
 
 `LT_TZ` applies here too: EVTX stores UTC, and the displayed times are converted
 to `LT_TZ` so they line up with the probe logs. Set it to the same value
-everywhere or the correlation is off by the local offset —
+everywhere or the correlation is off by the local offset. See
 [pitfall G3](../explanation/pitfalls.md#g3-event-log-timestamps-are-utc-your-capture-timestamps-are-not).
 
 ## Alerting
@@ -171,8 +171,8 @@ LT_ALERT_CMD="/usr/bin/ntfy publish mytopic"
 `sync-node.sh` never passes `--delete` to rsync. A day compressed on the probe
 would otherwise disappear here when it rotates there, and losing evidence to a
 housekeeping flag is not a trade worth making. The cost is that a day archived
-on the probe can come back uncompressed and sit next to its own archive — which
-`log_files()` in `correlate.py` handles, preferring the uncompressed copy.
+on the probe can come back uncompressed and sit next to its own archive, which
+`log_files()` in `correlate.py` handles by preferring the uncompressed copy.
 
 ## Event watching
 
