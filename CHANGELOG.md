@@ -23,6 +23,155 @@ network, and one network is not enough to call an interface settled.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-10
+
+The four findings from the same review that 0.1.1 left alone, because each of
+them changes what the tools print or what they refuse to do. Three are the same
+fault in three places: a tool stating more than it measured. The fourth is data
+that was collected for two releases and read by nothing.
+
+### Changed
+
+- **A clean symptom host no longer produces the verdict `NETWORK CLEAN`.** The
+  branch fires when the symptom host stayed reachable while something else
+  failed, and it printed the word CLEAN over a table showing the failure. It is
+  reproducible with this repository's own sample data: a 299-second gateway
+  outage, listed in the table as `<-- affected`, under `VERDICT: NETWORK CLEAN`.
+  The new label is `OUTAGE OUTSIDE THE SYMPTOM PATH`. The reasoning text was
+  already correct — the label was not, and the label is the part that travels
+  into a mail subject where the table does not follow. This is the rule the
+  neighbouring branch already stated in a code comment: no verdict may
+  contradict its own table. `client-path` failures now appear in that reasoning
+  text too; they were being dropped from the list.
+- **`correlate.py` resolves the target matrix from the data directory, and
+  stops rather than guess.** The default was `LT_TARGETS` or
+  `config/targets.conf` regardless of which directory was being analysed, while
+  `sync-node.sh` writes each probe's data to `$LT_BASE_DIR/<node>/`. Analysing
+  one probe against another's matrix fails in both directions at once and in
+  silence: labels only the remote matrix knows never appear at all — no row, no
+  `NO DATA`, no exit code — and labels only the local one knows appear as gaps
+  for targets nobody measured. Measured in the campaign this came from: seven
+  table rows became five, and the two that vanished were the `uplink-ref` rows
+  the second measurement point had been built for. Resolution order is now
+  `--targets`, then `targets.conf` beside the data directory, then `LT_TARGETS`
+  **only** for `$LT_BASE_DIR/ping` — the directory this installation itself
+  describes — and otherwise an abort naming both remedies. `LT_TARGETS` arrives
+  from an `EnvironmentFile`; it is ambient, not a statement about somebody
+  else's probe.
+- **`probe-node.sh` writes its own matrix to `$LT_BASE_DIR/targets.conf`, and
+  `sync-node.sh` pulls it.** So the matrix travels with the data by
+  construction and the abort above has a remedy that needs no path-guessing. A
+  probe without one is a warning, not an error: the message says the analysis
+  will need `--targets`.
+- **`switch-report.py` prints each port's link speed.** `switch-probe.py` has
+  been collecting `ifSpeed` into every timeline record since 0.1.0, and the
+  report's own header warns that discards are ordinary at a gigabit-to-100-Mbit
+  step — the caveat was unusable without the number it applies to. Unknown
+  prints as `?`, never `0`. A saturated 32-bit gauge prints as `>4 Gbit` rather
+  than a confident wrong `4 Gbit`.
+- **The synthetic sample data lays a `targets.conf` beside the data**, the way a
+  probe directory carries one, so the Quick Start no longer needs `--targets`.
+  Port 23 now runs at 100 Mbit, so the speed column has the case its caveat is
+  about.
+
+### Added
+
+- **`correlate.py` reads `l2-events-*.log` and counts STP topology-change
+  BPDUs in each symptom window.** `l2-sniffer.sh` and `probe-node.sh` have
+  written that log since 0.1.0 and `log-formats.md` documented its format; no
+  tool read it. A topology change at the second sessions tore down is the
+  switch's own account of the same seconds, and it is what the capture was
+  built for. The result has three states, not two: `None` when no line falls
+  inside the window, an empty result when the capture ran and the topology
+  held — a falsification worth having — and the matching lines otherwise. The
+  count is of BPDUs, not events: the topology-change flag stays set for the
+  length of the TC-while timer, so one change produces a run of flagged hellos,
+  and the lines are printed underneath the count so a reader can tell which it
+  is.
+- **`--l2-dir`, defaulting to `l2/` beside the data directory** — the same
+  coupling the matrix follows, and for the same reason: one probe's ping logs
+  read against another probe's capture describe two different segments, and
+  nothing in the output would say so.
+- **A provenance line, `matrix: <path> (<n> targets)`, above the windows.**
+  Which matrix was applied is part of the finding. Two probes with different
+  matrices produce tables that look alike and mean different things.
+- **Pitfall E7, "A capture file that exists is not a capture that ran".** The
+  daily L2 file is opened at midnight, so it exists from the day's first second
+  and a capture that dies at 09:00 leaves something indistinguishable from a
+  quiet day. Coverage therefore comes from the lines, not the file: with an
+  `stp` filter a live capture writes a BPDU every two seconds.
+- **Pitfall F9, "A target missing from the matrix is missing from the table,
+  not from the network"** — the measured seven-rows-into-five case above,
+  written down where the next person will meet it.
+- **The sample generator produces L2 captures, starting on day 3 of the
+  campaign.** The earlier days are uncovered on purpose, so the difference
+  between `NO DATA` and "no topology changes" is visible in the output of the
+  Quick Start rather than only described in the documentation.
+
+### Fixed
+
+- **`--targets` no longer silently ignores which data it is pointed at**, which
+  is the defect behind the abort described above.
+
+### Upgrade notes
+
+Three changes to output that break anything parsing it. All three are the
+reason this is a minor bump rather than a patch.
+
+**1. A verdict label changed.** Anything matching on the old string — a mail
+filter, a `grep` in a wrapper script, a spreadsheet column — needs the new one.
+Only this branch is affected; a window in which nothing failed still reports
+`NETWORK CLEAN`.
+
+```
+before:  VERDICT: NETWORK CLEAN
+         The symptom host itself stayed reachable (no outage over 2.5s), so a
+         network problem does not explain this window. Side finding: outage on
+         gw - not part of the symptom picture, but noted.
+
+after:   VERDICT: OUTAGE OUTSIDE THE SYMPTOM PATH
+         The symptom host itself stayed reachable (no outage over 2.5s), so a
+         network problem does not explain this window. But the network was not
+         clean either: gw (fabric-ref) lost packets for more than 2.5s. Outside
+         the symptom picture - and not to be reported as an all-clear.
+```
+
+The full vocabulary — nine labels and what each one means — is now listed in
+[docs/explanation/target-matrix.md](docs/explanation/target-matrix.md).
+
+**2. `correlate.py` gained two output shapes.** A `matrix:` line before the
+first window, and an `L2:` line after each table:
+
+```
+matrix: /var/log/lan-tomography/probe2/targets.conf (14 targets)
+  L2: 3 STP topology-change BPDU(s) in the window
+  L2: no STP topology change in the window (the capture was running)
+  L2: NO DATA - no capture covering this window. That is not "no topology changes".
+```
+
+**3. `switch-report.py` gained a `speed` column**, second from the left:
+
+```
+before:  | port | total | per sample | baseline (median) | factor |
+after:   | port | speed | total | per sample | baseline (median) | factor |
+```
+
+**And one change to behaviour.** `correlate.py` now exits 2 where it previously
+produced a table, if it cannot establish which target matrix belongs to the
+data directory. A single-probe installation is unaffected: `$LT_BASE_DIR/ping`
+still uses `LT_TARGETS`, and the shipped `lt-correlate.service` runs unchanged.
+A multi-probe setup analysing `$LT_BASE_DIR/<node>/ping` will stop until the
+probe's matrix sits beside its data — which `sync-node.sh` now does by itself
+after the probes are updated, or which one `rsync` puts there by hand:
+
+```bash
+rsync -az probe2:/var/log/lan-tomography/targets.conf \
+          /var/log/lan-tomography/probe2/targets.conf
+```
+
+`--targets` remains the escape hatch and always wins. The stop is deliberate:
+the output it replaces was missing rows and said so nowhere.
+
 ## [0.1.1] — 2026-08-10
 
 An independent review against the internal originals this repository was
@@ -229,6 +378,7 @@ become individually determinable, instead of collecting targets by gut feeling.
   generated from commit messages. Two gates come with it: the workflow fails if
   the section is missing or empty, and if the tag does not match `VERSION`.
 
-[Unreleased]: https://github.com/fidpa/lan-tomography/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/fidpa/lan-tomography/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.0
 [0.1.1]: https://github.com/fidpa/lan-tomography/releases/tag/v0.1.1
 [0.1.0]: https://github.com/fidpa/lan-tomography/releases/tag/v0.1.0

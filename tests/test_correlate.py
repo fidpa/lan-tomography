@@ -374,6 +374,177 @@ def test_seq_wrap_masks_loss_in_an_oversized_window(correlate, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# STP topology changes: three states, and the middle one is the trap
+# ---------------------------------------------------------------------------
+
+
+def stp_line(stamp: str, flags: str = "none") -> str:
+    """One `tcpdump -n -l -tttt` STP line, local time and no offset."""
+    return (f"{stamp} STP 802.1d, Config, Flags [{flags}], bridge-id "
+            f"8000.00:00:5e:00:53:01.8001, length 43")
+
+
+def write_l2(directory: Path, day: str, lines: list[str]) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"l2-events-{day}.log"
+    path.write_text("# ---- L2 capture starts | timestamps: UTC (no offset) ----\n"
+                    + "\n".join(lines) + "\n")
+    return path
+
+
+def test_topology_change_in_the_window_is_counted(correlate, tmp_path, monkeypatch):
+    """The capture exists for this. A change at the tear-down second is
+    the switch itself saying the path was rebuilt."""
+    monkeypatch.setenv("LT_TZ", "UTC")
+    write_l2(tmp_path / "l2", "2026-08-08", [
+        stp_line("2026-08-08 12:00:00.100000"),
+        stp_line("2026-08-08 12:00:02.100000", flags="Topology change"),
+        stp_line("2026-08-08 12:00:04.100000"),
+    ])
+    start = 1786190400.0                      # 2026-08-08 12:00:00 UTC
+
+    hits = correlate.stp_changes(tmp_path / "l2", start, start + 10)
+
+    assert hits is not None
+    assert len(hits) == 1
+    assert "Topology change" in hits[0]
+
+
+def test_window_without_l2_lines_yields_none_not_zero_changes(correlate, tmp_path,
+                                                              monkeypatch):
+    """A day's file is opened at midnight; a capture that dies at 09:00 leaves
+    a file that looks exactly like a quiet day.
+
+    So the answer for an uncovered window is None. Returning 0 would turn a
+    dead capture into a falsification - the same mistake as scoring a missing
+    ping log as 0 % loss, one layer down.
+    """
+    monkeypatch.setenv("LT_TZ", "UTC")
+    write_l2(tmp_path / "l2", "2026-08-08", [
+        stp_line("2026-08-08 09:00:00.100000"),   # capture died after this
+    ])
+    start = 1786190400.0                      # 12:00 UTC, three hours later
+
+    assert correlate.stp_changes(tmp_path / "l2", start, start + 10) is None
+    # And an empty directory is the same statement, not a quieter one.
+    assert correlate.stp_changes(tmp_path / "empty", start, start + 10) is None
+
+
+def test_a_running_capture_without_changes_is_a_finding(correlate, tmp_path,
+                                                        monkeypatch):
+    """The other side of the same rule: [] and None must not collapse.
+
+    An empty list says "the capture was running and the topology held", which
+    is a falsification worth having.
+    """
+    monkeypatch.setenv("LT_TZ", "UTC")
+    write_l2(tmp_path / "l2", "2026-08-08", [
+        stp_line("2026-08-08 12:00:00.100000"),
+        stp_line("2026-08-08 12:00:02.100000"),
+    ])
+    start = 1786190400.0
+
+    assert correlate.stp_changes(tmp_path / "l2", start, start + 10) == []
+
+
+def test_l2_timestamps_follow_lt_tz(correlate, tmp_path, monkeypatch):
+    """`tcpdump -tttt` writes local time with no offset.
+
+    Read as UTC on a probe set to Europe/Berlin, every L2 line lands two hours
+    away from the ping data it is meant to corroborate - wider than most events
+    worth correlating, and the correlation still looks convincing.
+    """
+    write_l2(tmp_path / "l2", "2026-08-08", [
+        stp_line("2026-08-08 14:00:02.100000", flags="Topology change"),
+    ])
+    start = 1786190400.0                      # 12:00 UTC = 14:00 Europe/Berlin
+
+    monkeypatch.setenv("LT_TZ", "Europe/Berlin")
+    assert len(correlate.stp_changes(tmp_path / "l2", start, start + 10)) == 1
+
+    monkeypatch.setenv("LT_TZ", "UTC")
+    assert correlate.stp_changes(tmp_path / "l2", start, start + 10) is None
+
+
+def test_unknown_lt_tz_falls_back_to_utc(correlate, tmp_path, monkeypatch):
+    """A typo in LT_TZ must not cost a measurement window."""
+    monkeypatch.setenv("LT_TZ", "Europe/Nowhere")
+    write_l2(tmp_path / "l2", "2026-08-08", [
+        stp_line("2026-08-08 12:00:02.100000", flags="Topology change"),
+    ])
+    start = 1786190400.0
+
+    assert len(correlate.stp_changes(tmp_path / "l2", start, start + 10)) == 1
+
+
+# ---------------------------------------------------------------------------
+# The matrix has to follow the data directory
+# ---------------------------------------------------------------------------
+
+MATRIX = "192.0.2.1 gw fabric-ref\n192.0.2.20 ts01 symptom\n"
+
+
+def test_targets_beside_the_data_win_over_the_configured_default(correlate, tmp_path,
+                                                                 monkeypatch):
+    """A probe's own matrix beats the one this installation happens to carry.
+
+    LT_TARGETS arrives from an EnvironmentFile - it describes the local probe,
+    not whichever directory is being analysed.
+    """
+    node = tmp_path / "probe2"
+    (node / "ping").mkdir(parents=True)
+    (node / "targets.conf").write_text(MATRIX)
+    monkeypatch.setenv("LT_TARGETS", str(tmp_path / "local.conf"))
+
+    assert correlate.resolve_targets(node / "ping") == node / "targets.conf"
+
+
+def test_foreign_data_directory_without_a_matrix_aborts(correlate, tmp_path):
+    """Analysing a probe's data against another probe's matrix is silent.
+
+    Labels only the remote matrix knows never reach the table; labels only the
+    local one knows appear as measurement gaps. Neither shows up as an error.
+    Measured once: seven rows became five, and the two that vanished were the
+    two the second measurement point had been built for. A stop is the lesser
+    evil, so this stops.
+    """
+    node = tmp_path / "probe2"
+    (node / "ping").mkdir(parents=True)
+
+    with pytest.raises(correlate.TargetsUnresolved) as exc:
+        correlate.resolve_targets(node / "ping")
+
+    # The message has to name the remedy, not just the problem.
+    assert "targets.conf" in str(exc.value)
+    assert "--targets" in str(exc.value)
+
+
+def test_explicit_targets_always_win(correlate, tmp_path):
+    """--targets is the escape hatch and outranks a file beside the data."""
+    node = tmp_path / "probe2"
+    (node / "ping").mkdir(parents=True)
+    (node / "targets.conf").write_text(MATRIX)
+    chosen = tmp_path / "chosen.conf"
+    chosen.write_text(MATRIX)
+
+    assert correlate.resolve_targets(node / "ping", str(chosen)) == chosen
+
+
+def test_the_configured_data_directory_still_uses_lt_targets(correlate, tmp_path,
+                                                             monkeypatch):
+    """Single-probe operation must not be made harder by the rule above.
+
+    For the directory this installation itself describes, LT_TARGETS is the
+    right answer - that is what it was set for.
+    """
+    monkeypatch.setattr(correlate, "DEFAULT_PING_DIR", tmp_path / "ping")
+    (tmp_path / "ping").mkdir()
+    monkeypatch.setenv("LT_TARGETS", str(tmp_path / "local.conf"))
+
+    assert correlate.resolve_targets(tmp_path / "ping") == tmp_path / "local.conf"
+
+
+# ---------------------------------------------------------------------------
 # Pitfall 8: an outage in an unjudged role must not read as "clean"
 # ---------------------------------------------------------------------------
 
@@ -401,3 +572,40 @@ def test_no_data_at_all_is_unclear_not_clean(correlate):
     targets = {"ts01": "symptom", "gw": "fabric-ref"}
     v, _ = correlate.verdict({"ts01": None, "gw": None}, targets)
     assert v == "UNCLEAR"
+
+
+def test_outage_outside_the_symptom_path_is_not_reported_as_clean(correlate):
+    """A clean symptom host does not make the network clean.
+
+    The same rule as the test above, one branch further down and much easier to
+    miss: the symptom host answers throughout while a judging role fails hard.
+    Until 0.2.0 this printed "NETWORK CLEAN" over a table in which the gateway
+    was out for 299 s - reproducible with the shipped synthetic data. The label
+    is what travels into a mail subject, and that one said the opposite of its
+    own table.
+    """
+    targets = {"ts01": "symptom", "gw": "fabric-ref"}
+    results = {
+        "ts01": {"affected": False, "offline": False},
+        "gw": {"affected": True, "offline": False},
+    }
+    v, why = correlate.verdict(results, targets)
+
+    assert v == "OUTAGE OUTSIDE THE SYMPTOM PATH"
+    assert "CLEAN" not in v
+    assert "gw" in why
+
+
+def test_nothing_failed_at_all_is_still_network_clean(correlate):
+    """The other side of the same boundary: CLEAN must stay reachable.
+
+    A label that never appears is as useless as one that appears wrongly.
+    """
+    targets = {"ts01": "symptom", "gw": "fabric-ref"}
+    results = {
+        "ts01": {"affected": False, "offline": False},
+        "gw": {"affected": False, "offline": False},
+    }
+    v, _ = correlate.verdict(results, targets)
+
+    assert v == "NETWORK CLEAN"

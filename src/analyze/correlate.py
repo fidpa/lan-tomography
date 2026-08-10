@@ -24,10 +24,13 @@ INPUTS
     symptom windows  waves.csv - see docs/reference/log-formats.md. Produce it
                      from whatever records your symptom; this repository ships
                      one reference producer in src/contrib/.
-    target matrix    config/targets.conf, for the roles
+    target matrix    the one belonging to THIS data directory - see
+                     resolve_targets()
+    L2 events        <base>/l2/l2-events-<date>.log, optional. Counted, not
+                     required: a window without them says so.
 
 CONFIGURATION (environment or config/lan-tomography.conf)
-    LT_BASE_DIR, LT_TARGETS, LT_OUTAGE_THRESHOLD_S, LT_PING_INTERVAL
+    LT_BASE_DIR, LT_TARGETS, LT_OUTAGE_THRESHOLD_S, LT_PING_INTERVAL, LT_TZ
 """
 
 from __future__ import annotations
@@ -40,11 +43,17 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 from version import read_version
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+BASE_DIR = Path(os.environ.get("LT_BASE_DIR", "/var/log/lan-tomography"))
+# The data directory this installation describes. Anything else is somebody
+# else's probe - see resolve_targets().
+DEFAULT_PING_DIR = BASE_DIR / "ping"
 
 # Send interval of the measurement; must match the probes.
 PING_INTERVAL_S = float(os.environ.get("LT_PING_INTERVAL", "0.2"))
@@ -103,6 +112,80 @@ RE_NOANSWER = re.compile(r"^\[(\d+\.\d+)\] no answer yet for icmp_seq=(\d+)")
 # without a seq (rare) fall back to -1.
 RE_UNREACH = re.compile(
     r"^\[(\d+\.\d+)\](?:.*icmp_seq=(\d+))?.*(?:Unreachable|Time to live exceeded)")
+
+# The L2 text log is "tcpdump -n -l -tttt" output: local time, WITHOUT an
+# offset. Which zone that is comes from LT_TZ, which is why the deployment
+# guide insists every probe carries the same one.
+RE_L2_STAMP = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+)")
+# "Flags [Topology change]" on a config BPDU, "Topology Change" on a TCN, and
+# the abbreviated forms some tcpdump builds print. Deliberately generous: a
+# missed topology change is a lost finding, a spurious one is a line the reader
+# can check, because the matching lines are printed.
+RE_TOPOLOGY_CHANGE = re.compile(r"topology[- ]change|\bTCN?\b", re.IGNORECASE)
+
+
+class TargetsUnresolved(Exception):
+    """No target matrix can be established for this data directory."""
+
+
+def resolve_targets(ping_dir, explicit=None):
+    """The target matrix belonging to THIS data directory.
+
+    The matrix has to follow the data, because the two are collected in
+    different places: probes write to <base>/<node>/ping while the matrix that
+    describes what those labels mean belongs to the probe. Taking the local
+    matrix for a foreign probe's data is silent and total - labels only the
+    remote matrix knows never appear in the output at all, and labels only the
+    local one knows appear as measurement gaps.
+
+    That is not hypothetical. In the campaign this came from, analysing a
+    second measurement point against the local matrix turned seven table rows
+    into five: the two uplink-ref rows disappeared - the very targets the
+    second point had been built for - with no message and no exit code. A
+    silent error in a chain of evidence is worse than a stop, so this stops.
+
+    Order:
+        1. --targets on the command line. Always wins; it is the escape hatch.
+        2. targets.conf beside the data directory (<ping-dir>/../targets.conf).
+           This is what makes multi-probe analysis work: sync-node.sh puts the
+           probe's own matrix there.
+        3. LT_TARGETS, or <repo>/config/targets.conf - but ONLY for the data
+           directory this installation itself describes. LT_TARGETS arrives
+           from an EnvironmentFile, so it is ambient, not a decision about the
+           directory being analysed.
+        4. Otherwise: raise. There is no fourth guess worth making.
+
+    Args:
+        ping_dir: the ping log directory being analysed.
+        explicit: value of --targets, or None.
+
+    Returns:
+        Path to the matrix to use.
+
+    Raises:
+        TargetsUnresolved: no matrix can be established for this directory.
+    """
+    if explicit:
+        return Path(explicit)
+
+    resolved = Path(ping_dir).resolve()
+    beside = resolved.parent / "targets.conf"
+    if beside.is_file():
+        return beside
+
+    if resolved == DEFAULT_PING_DIR.resolve():
+        return Path(os.environ.get("LT_TARGETS",
+                                   REPO_ROOT / "config" / "targets.conf"))
+
+    raise TargetsUnresolved(
+        f"no target matrix for --ping-dir {ping_dir}\n"
+        f"  looked for: {beside}\n"
+        f"  LT_TARGETS is not used here: it describes {DEFAULT_PING_DIR}, not "
+        f"this directory.\n"
+        "  Put the probe's own targets.conf beside its data, or name one with "
+        "--targets.\n"
+        "  Refusing to guess: the local matrix would drop this probe's targets "
+        "from the table without a word.")
 
 
 def load_targets(path):
@@ -256,6 +339,85 @@ def analyse_window(ping_dir, label, start, end):
     }
 
 
+def capture_tz():
+    """Timezone the L2 capture's timestamps are in, from LT_TZ.
+
+    `tcpdump -tttt` writes local time and no offset, so the file cannot say
+    which zone it means. Falls back to UTC on an unknown name rather than
+    failing - a typo in LT_TZ should not cost a measurement window - and the
+    fallback is announced, because a silent one would shift every timestamp by
+    the local offset and still look plausible.
+    """
+    name = os.environ.get("LT_TZ", "UTC")
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        print(f"unknown LT_TZ {name!r}, reading L2 timestamps as UTC",
+              file=sys.stderr)
+        return ZoneInfo("UTC")
+
+
+def stp_changes(l2_dir, start, end):
+    """STP topology changes in the window - or None if nothing was captured.
+
+    A topology change at the second a session tore down is the single most
+    direct piece of evidence the L2 capture can produce: the switch itself
+    saying the path was rebuilt. `l2-sniffer.sh` and `probe-node.sh` have been
+    writing this log all along; until 0.2.0 nothing read it.
+
+    THE RETURN VALUE HAS THREE STATES AND THEY MUST STAY APART
+        None  no L2 line falls inside the window. The capture was not running,
+              the day's file is missing, or the log does not reach back this
+              far. That is NOT "no topology changes".
+        []    the capture was running and produced no topology change. A
+              finding, and a falsification.
+        [...] the matching lines, so the reader can check them.
+
+    The presence of a file proves nothing on its own: the daily file is opened
+    at midnight and a capture that dies at 09:00 leaves a file that looks
+    exactly like a quiet day. Coverage is therefore established from the lines
+    themselves - with the `stp` filter a live capture yields a BPDU every two
+    seconds, so a window with no lines at all is a window with no capture.
+
+    Args:
+        l2_dir: directory holding l2-events-<date>.log[.zst].
+        start: window start, Unix epoch.
+        end: window end, Unix epoch.
+
+    Returns:
+        List of matching lines, or None if the window was not covered.
+    """
+    tz = capture_tz()
+    covered = False
+    hits = []
+
+    for path in log_files(l2_dir, "l2-events-*.log"):
+        try:
+            lines = read_log(path).splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            m = RE_L2_STAMP.match(line)
+            if not m:
+                continue                      # capture-start markers and noise
+            try:
+                # The zone comes from LT_TZ, not from the line: -tttt writes
+                # none. Attached in the same expression so it cannot be
+                # forgotten one edit later.
+                stamp = datetime.strptime(
+                    m.group(1), "%Y-%m-%d %H:%M:%S.%f").replace(tzinfo=tz)
+            except ValueError:
+                continue
+            ts = stamp.timestamp()
+            if not start <= ts <= end:
+                continue
+            covered = True
+            if "STP" in line.upper() and RE_TOPOLOGY_CHANGE.search(line):
+                hits.append(line.strip())
+
+    return hits if covered else None
+
+
 def is_hit(role, r):
     """Does one result count as an outage?
 
@@ -325,13 +487,23 @@ def verdict(results, targets, threshold=None):
     # What always decides is whether the path TO THE SYMPTOM HOST failed. If
     # another machine fails while the symptom host answers throughout, that is
     # a side finding and not an explanation.
+    #
+    # It is NOT a clean network, though, and this branch used to say so. The
+    # label is what travels - into a mail subject, into somebody else's
+    # spreadsheet - and "NETWORK CLEAN" above a table showing a 299 s gateway
+    # outage is the exact contradiction the unjudged branch above exists to
+    # avoid. What was established here is narrower than "clean": the symptom
+    # path held. That is what the label now says.
     if not symptom:
-        others = same_host + other_host + fabric + hypervisor + unjudged
-        return ("NETWORK CLEAN",
+        others = sorted(set(same_host + other_host + fabric + client
+                            + hypervisor + unjudged))
+        named = ", ".join(f"{lab} ({targets.get(lab)})" for lab in others)
+        return ("OUTAGE OUTSIDE THE SYMPTOM PATH",
                 (f"The symptom host itself stayed reachable (no outage over "
                  f"{threshold}s), so a network problem does not explain this window. "
-                 f"Side finding: outage on {', '.join(others)} - not part of the "
-                 "symptom picture, but noted."))
+                 f"But the network was not clean either: {named} lost packets for "
+                 f"more than {threshold}s. Outside the symptom picture - and not to "
+                 "be reported as an all-clear."))
 
     if other_host or fabric:
         return ("FABRIC",
@@ -379,14 +551,15 @@ def read_waves(path):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--ping-dir",
-                    default=Path(os.environ.get("LT_BASE_DIR",
-                                                "/var/log/lan-tomography")) / "ping")
-    ap.add_argument("--targets",
-                    default=os.environ.get("LT_TARGETS", REPO_ROOT / "config" / "targets.conf"))
-    ap.add_argument("--waves",
-                    default=Path(os.environ.get("LT_BASE_DIR",
-                                                "/var/log/lan-tomography")) / "waves.csv")
+    ap.add_argument("--ping-dir", default=DEFAULT_PING_DIR)
+    ap.add_argument("--targets", default=None,
+                    help="target matrix. Default: targets.conf beside the data "
+                         "directory, or LT_TARGETS for the configured one")
+    ap.add_argument("--waves", default=BASE_DIR / "waves.csv")
+    ap.add_argument("--l2-dir", default=None,
+                    help="L2 event logs, for the STP topology-change count. "
+                         "Default: l2/ beside the data directory - the same "
+                         "coupling the target matrix follows")
     ap.add_argument("--pad", type=float, default=30.0,
                     help="seconds to extend each window on both sides (default: 30)")
     ap.add_argument("--version", action="version",
@@ -394,10 +567,20 @@ def main():
     args = ap.parse_args()
 
     try:
-        targets = load_targets(args.targets)
+        targets_path = resolve_targets(args.ping_dir, args.targets)
+        targets = load_targets(targets_path)
+    except TargetsUnresolved as exc:
+        print(exc, file=sys.stderr)
+        return 2
     except OSError as exc:
         print(f"target matrix not readable: {exc}", file=sys.stderr)
         return 2
+
+    # The L2 log follows the data for the same reason the matrix does: a probe's
+    # ping logs and a different probe's capture describe two segments, and
+    # nothing in the output would say so.
+    l2_dir = (Path(args.l2_dir) if args.l2_dir
+              else Path(args.ping_dir).resolve().parent / "l2")
 
     try:
         windows = read_waves(args.waves)
@@ -406,6 +589,12 @@ def main():
         print("See docs/reference/log-formats.md - waves.csv is an INPUT; "
               "produce it from whatever records your symptom.", file=sys.stderr)
         return 2
+
+    # Which matrix was applied is part of the finding, not a detail. Two probes
+    # with different matrices produce tables that look alike and mean different
+    # things; anyone re-reading the output later has to be able to tell them
+    # apart without re-running it.
+    print(f"matrix: {targets_path} ({len(targets)} targets)")
 
     if not windows:
         print("no symptom windows to analyse")
@@ -434,6 +623,28 @@ def main():
             state = "offline" if r.get("offline") else ""
             print(f"  {lab:<16}{role:<14}{r['sent']:>8}{r['lost']:>8}"
                   f"{r['outage_s']:>8.1f}s{r['max_gap_s']:>9.2f}s{flag}{state}")
+
+        # The switch's own account of the same seconds. Printed under the table
+        # and never folded into the verdict: it corroborates or it does not,
+        # and a reader who can see both is in a better position than one handed
+        # a single word.
+        stp = stp_changes(l2_dir, start, end)
+        if stp is None:
+            print("  L2: NO DATA - no capture covering this window. "
+                  'That is not "no topology changes".')
+        elif stp:
+            # BPDUs, not events: the topology-change flag stays set for the
+            # length of the TC-while timer, so one change produces a run of
+            # flagged hellos. The lines are printed so the reader can see which
+            # it is.
+            print(f"  L2: {len(stp)} STP topology-change BPDU(s) in the window")
+            for line in stp[:5]:
+                print(f"      {line[:120]}")
+            if len(stp) > 5:
+                print(f"      ... and {len(stp) - 5} more")
+        else:
+            print("  L2: no STP topology change in the window "
+                  "(the capture was running)")
     return 0
 
 

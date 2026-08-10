@@ -241,6 +241,19 @@ main() {
 
     log_info "probe $NODE_NAME starting on $IFACE (targets from $TARGETS_FILE, TZ=$TZ)"
 
+    # Lay the matrix down beside the data it describes.
+    #
+    # The two are collected in different places - the matrix belongs to the
+    # probe, the data gets pulled to whichever machine does the analysis - and
+    # correlate.py refuses to analyse a data directory whose matrix it cannot
+    # establish, because taking the wrong one is silent: labels this probe
+    # measures and the analysing machine's matrix does not know simply never
+    # appear in the table. Copying it here means the matrix travels with the
+    # data by construction, without sync-node.sh having to guess a path.
+    if ! cp -- "$TARGETS_FILE" "${BASE_DIR}/targets.conf" 2>/dev/null; then
+        log_warning "cannot write ${BASE_DIR}/targets.conf - the analysing machine will need --targets"
+    fi
+
     # pcap ring buffer: bounded at PCAP_SIZE_MB * PCAP_FILES, overwrites itself.
     #
     # -w without -U buffers: the file can sit at 0 bytes for days and look

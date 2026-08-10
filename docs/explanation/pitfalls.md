@@ -330,6 +330,32 @@ The 42-vs-60-byte padding test distinguishes frames the local stack produced.
 Applied to somebody else's traffic it reports "everything is a copy" and is
 worthless.
 
+### E7. A capture file that exists is not a capture that ran
+
+The daily `l2-events-<date>.log` is opened at midnight, so it exists for the
+whole day from its first second. A capture that dies at 09:00 leaves behind a
+file that is indistinguishable, by its presence, from a quiet day — and quiet
+is what "no topology change in the window" means to a reader.
+
+This is [B8](#b8-a-missing-file-is-not-zero-loss) one layer down, and it is
+worse here, because at layer 3 a missing file at least draws attention. Here
+the file is present and the honest answer still has to be "no data".
+
+Coverage has to come from the **lines**, not the file: with an `stp` filter a
+live capture writes a BPDU every two seconds, so a window containing no lines
+at all is a window with no capture. `correlate.py` distinguishes all three
+states — `None` for uncovered, an empty result for "the capture ran and the
+topology held", and the matching lines otherwise.
+
+One more, when the lines are there: the topology-change flag stays set for the
+length of the TC-while timer, so a single change produces a **run** of flagged
+hellos. Counting lines counts BPDUs, not events — which is why the lines
+themselves are printed underneath the count.
+
+*Tests: `window_without_l2_lines_yields_none_not_zero_changes`,
+`a_running_capture_without_changes_is_a_finding`,
+`topology_change_in_the_window_is_counted`, `l2_timestamps_follow_lt_tz`*
+
 ---
 
 ## F. Verdicts and reasoning
@@ -355,13 +381,33 @@ Before believing a negative result, validate the method against a case where
 you already know the answer. If you cannot, say "this method found nothing",
 never "there was nothing".
 
-### F3. An outage in a role that carries no verdict must not read as "clean"
+### F3. A verdict must never contradict its own table
 
-If no judging role failed but something else did, the honest output is "outage
-outside the judgement matrix", not "the network was clean". Otherwise the
-verdict text contradicts the table printed underneath it.
+The label is what travels. The table stays in the terminal; the label goes into
+a mail subject, a ticket title, somebody else's spreadsheet. If it says "clean"
+while the table underneath shows a five-minute outage, the table has lost.
 
-*Test: `outage_in_an_unjudged_role_is_not_reported_as_clean`*
+There are two ways to arrive at that contradiction, and the second is much
+easier to miss than the first:
+
+1. **Nothing with a judging role failed, but something else did.** The honest
+   output is "outage outside the judgement matrix" — `switch-ref`, `uplink-ref`
+   and `wan-ref` deliberately carry no verdict, which is not the same as
+   carrying a clean one.
+2. **The symptom host stayed reachable while a judging role failed hard.** The
+   symptom is genuinely not explained by the network — but the network was not
+   clean either. This one shipped as `NETWORK CLEAN` until 0.2.0 and was
+   reproducible with this repository's own sample data: a 299-second gateway
+   outage, printed in the table, under the word CLEAN. It now reads "outage
+   outside the symptom path".
+
+The general form: **the narrowest true statement, never the most convenient
+one.** "The symptom path held" and "the network was clean" are different
+statements, and only one of them was measured.
+
+*Tests: `outage_in_an_unjudged_role_is_not_reported_as_clean`,
+`outage_outside_the_symptom_path_is_not_reported_as_clean`,
+`nothing_failed_at_all_is_still_network_clean`*
 
 ### F4. Simultaneous interventions destroy attribution
 
@@ -397,6 +443,32 @@ clock that is genuinely wrong does not land on precisely two hours.
 Deleting a wrong intermediate state removes the evidence that it was wrong, and
 somebody re-derives it a week later. Every retraction in the case study is
 still there, marked.
+
+### F9. A target missing from the matrix is missing from the table, not from the network
+
+The measurements and the matrix that says what they mean are collected in
+different places: the probe writes the logs, and the matrix belongs to the
+probe — but the analysis runs on the machine the data was pulled to, which has
+a matrix of its own.
+
+Analyse one probe's data against another probe's matrix and the output is
+wrong in **both** directions at once, silently. Labels only the remote matrix
+knows never appear at all — no row, no `NO DATA`, no exit code. Labels only the
+local one knows appear as measurement gaps for targets that were never
+measured.
+
+Measured: seven table rows became five, and the two that vanished were the two
+`uplink-ref` rows — the targets the second measurement point had been built
+for. The table looked complete, because a table with five rows looks exactly
+like a table with five rows.
+
+The fix is not care, it is coupling: the matrix travels with the data, and an
+analysis that cannot establish which matrix belongs to a directory **stops**
+rather than guess. A stop in a chain of evidence costs a minute; a silent
+omission costs the conclusion.
+
+*Tests: `foreign_data_directory_without_a_matrix_aborts`,
+`targets_beside_the_data_win_over_the_configured_default`*
 
 ---
 

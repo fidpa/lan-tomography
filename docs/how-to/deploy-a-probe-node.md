@@ -63,11 +63,26 @@ Any file sync works. Pull from the collecting machine:
 ```bash
 rsync -az probe2:/var/log/lan-tomography/ping/ \
           /var/log/lan-tomography/probe2/ping/
+rsync -az probe2:/var/log/lan-tomography/targets.conf \
+          /var/log/lan-tomography/probe2/targets.conf
 ```
 
 **Do not use `--delete`.** A day compressed on the probe would come back
 uncompressed and sit next to its own archive, and both would be counted. The
 analysis handles that case, but only because it was hit once.
+
+**Bring the matrix with the data.** `probe-node.sh` writes its own
+`targets.conf` into its base directory for this; `src/ops/sync-node.sh` pulls
+it automatically. Without it, `correlate.py` stops rather than analyse this
+probe's data against a matrix from another machine:
+
+```
+no target matrix for --ping-dir /var/log/lan-tomography/probe2/ping
+```
+
+That stop is the point. The target list *should* differ per probe, so the local
+matrix silently omits every target only this probe measures — seven rows became
+five once, and the two that vanished were the reason the probe existed.
 
 ## Watch the chain, not just the probe
 

@@ -133,6 +133,29 @@ produce a confident "the fabric is broken".
 With two at different operators the reading is unambiguous: one fails → that
 target. Both fail together → the way out.
 
+## The verdicts
+
+`correlate.py` prints one of nine labels per window. Treat the label as an
+interface: it is the part that gets pasted into a mail subject or a ticket, so
+it has to survive being read on its own, without the table underneath it.
+
+| Verdict | What failed |
+|---|---|
+| `NETWORK CLEAN` | Nothing. No target had a contiguous outage over the threshold. |
+| `OUTAGE OUTSIDE THE SYMPTOM PATH` | Something with a judging role, but **not** the symptom host. The symptom is not explained — and the network was not clean. |
+| `OUTAGE OUTSIDE THE JUDGEMENT MATRIX` | Only roles that carry no verdict (`switch-ref`, `uplink-ref`, `wan-ref`). The statement arises from the difference between probes, not from this window. |
+| `CLIENT PATH` | Workstations, while the servers held — between desk and server room. |
+| `FABRIC` | The symptom host together with targets on other hardware — switch, cabling, uplink. |
+| `HOST UPLINK` | The symptom host **and** its hypervisor — in front of the hypervisor. |
+| `HOST INTERNAL` | The symptom host and its sibling guests, hypervisor clean — inside the host. |
+| `GUEST SPECIFIC` | The symptom guest alone — its virtual NIC or queue. |
+| `UNCLEAR` | No ping data for the window. Not a result. |
+
+Two of the nine say "something failed, but it does not explain the symptom",
+and both are deliberately worded so that neither can be misread as an
+all-clear. That distinction was bought the hard way — see
+[pitfalls F3](pitfalls.md#f3-a-verdict-must-never-contradict-its-own-table).
+
 ---
 
 ## Deriving thresholds

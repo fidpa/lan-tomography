@@ -26,6 +26,10 @@ WHAT IT PRODUCES
     * one target that is silent throughout, because a target that is simply not
       there is a case every analysis meets
     * a day whose file is COMPRESSED, so the archive-day pitfall is exercised
+    * an L2 CAPTURE THAT STARTS LATE, carrying STP topology changes at the
+      outages it covers and nothing at all for the days before it - so the
+      difference between "no topology changes" and "no capture" is visible in
+      the output rather than only described in the docs
 
     Plus the derived inputs: waves.csv, switch-timeline.jsonl.
 
@@ -39,8 +43,10 @@ INVOCATION
     Ping logs run at one sample per second per target, so the output is
     roughly 40 MB per day - the same order as a real campaign. It is
     written wherever you point it and is never committed.
-    correlate.py --ping-dir ./data/ping --waves ./data/waves.csv \\
-                 --targets ../../config/targets.conf.example
+    correlate.py --ping-dir ./data/ping --waves ./data/waves.csv
+
+    The output directory has the shape of a probe's data directory, target
+    matrix included, so the analysis finds the matrix by itself.
 """
 
 from __future__ import annotations
@@ -138,6 +144,18 @@ class Campaign:
             if start <= ts_offset <= start + dur:
                 return kind
         return None
+
+    def topology_change_at(self, ts_offset: float) -> bool:
+        """An STP topology change at the start of every event with an outage.
+
+        This is what the L2 capture exists for: the switch's own account of the
+        same seconds. A path that is rebuilt while sessions tear down is a
+        different statement from a path that merely lost packets.
+        """
+        for start, _dur, kind in self.events:
+            if "outage" in kind and 0 <= ts_offset - start <= 6:
+                return True
+        return False
 
     def surge_precursor_at(self, ts_offset: float) -> bool:
         """0.1 s before each flood there is a precursor frame burst.
@@ -282,6 +300,48 @@ def gen_waves(out: Path, camp: Campaign) -> None:
     (out / "waves.csv").write_text("\n".join(rows) + "\n")
 
 
+# The L2 capture is not running on the first two days.
+#
+# Deliberate, and the most instructive thing in this generator. Captures get
+# added once an investigation is under way, which means the earliest windows -
+# often the interesting ones - are not covered. correlate.py must say "NO DATA"
+# for those and not "no topology changes": one is a missing measurement, the
+# other is a falsification, and a reader who cannot tell them apart will quote
+# the wrong one.
+L2_CAPTURE_FROM_DAY = 2
+
+# tcpdump's own hello interval on a segment running STP.
+STP_HELLO_S = 2
+
+
+def gen_l2_events(out: Path, camp: Campaign) -> None:
+    """Daily plain-text STP captures, as `tcpdump -n -l -tttt` writes them.
+
+    Local time WITHOUT an offset - which is the format's defect, not this
+    generator's. The lines are written in UTC, so the demo wants LT_TZ unset or
+    set to UTC; on any other value correlate.py shifts them by that offset and
+    the corroboration silently misses.
+    """
+    l2_dir = out / "l2"
+    l2_dir.mkdir(parents=True, exist_ok=True)
+
+    for day in range(L2_CAPTURE_FROM_DAY, camp.days):
+        day_start = EPOCH_DAY1 + day * 86400
+        lines = [(f"# ---- L2 capture starts {iso(day_start)} on eth0 "
+                  "| line timestamps: UTC (no offset shown) ----")]
+
+        for tick in range(0, 86400, STP_HELLO_S):
+            ts = day_start + tick
+            flags = ("Topology change"
+                     if camp.topology_change_at(ts - EPOCH_DAY1) else "none")
+            stamp = datetime.fromtimestamp(ts, UTC).strftime("%Y-%m-%d %H:%M:%S.%f")
+            lines.append(f"{stamp} STP 802.1d, Config, Flags [{flags}], "
+                         "bridge-id 8000.00:00:5e:00:53:01.8001, length 43")
+
+        (l2_dir / f"l2-events-{day_str(day_start)}.log").write_text(
+            "\n".join(lines) + "\n")
+
+
 def gen_switch_timeline(out: Path, camp: Campaign, rng: random.Random) -> None:
     path = out / "switch-timeline.jsonl"
     records = []
@@ -296,7 +356,14 @@ def gen_switch_timeline(out: Path, camp: Campaign, rng: random.Random) -> None:
             kind = camp.event_at(offset)
 
             ports = {}
-            for idx, descr in ((5, "uplink"), (23, "floor"), (25, "spare")):
+            # Port 23 runs at 100 Mbit on purpose: a gigabit-to-100-Mbit step
+            # is where discards are ordinary, and a report that shows discards
+            # without showing the step invites the wrong conclusion. The
+            # speed is what makes the caveat usable - see describe_port() in
+            # src/analyze/switch-report.py.
+            for idx, descr, speed in ((5, "uplink", 1000000000),
+                                      (23, "floor", 100000000),
+                                      (25, "spare", 1000000000)):
                 d = {"in_discards": 0, "in_errors": 0, "out_errors": 0,
                      "in_octets": rng.randint(10**6, 10**7),
                      "out_octets": rng.randint(10**6, 10**7)}
@@ -305,7 +372,7 @@ def gen_switch_timeline(out: Path, camp: Campaign, rng: random.Random) -> None:
                 # device is busy. That gap is part of the signature.
                 d["out_discards"] = rng.randint(5000, 40000) if kind and "flood" in kind else 0
                 ports[str(idx)] = {"descr": descr, "oper_status": 1,
-                                   "speed": 1000000000, "d": d, "dt": 60.0}
+                                   "speed": speed, "d": d, "dt": 60.0}
 
             if kind and "flood" in kind and rng.random() < 0.66:
                 continue      # the agent did not answer. Deliberate.
@@ -329,6 +396,18 @@ def compress_one_day(out: Path) -> None:
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("  (zstd not available - day 1 left uncompressed)")
             return
+
+
+def gen_targets(out: Path) -> None:
+    """Put the matrix beside the data, the way a probe directory carries one.
+
+    correlate.py resolves the matrix from the data directory and refuses to
+    guess (see resolve_targets there). Shipping the demo without one would make
+    the first command in the README an error message.
+    """
+    src = Path(__file__).resolve().parent.parent.parent / "config" / "targets.conf.example"
+    (out / "targets.conf").write_text(src.read_text(encoding="utf-8"),
+                                      encoding="utf-8")
 
 
 def main() -> int:
@@ -356,8 +435,13 @@ def main() -> int:
     print("  packet-rate logs")
     gen_waves(args.out, camp)
     print("  waves.csv")
+    gen_l2_events(args.out, camp)
+    print(f"  L2 captures (from day {L2_CAPTURE_FROM_DAY + 1} on - "
+          "the earlier days are uncovered on purpose)")
     gen_switch_timeline(args.out, camp, rng)
     print("  switch-timeline.jsonl")
+    gen_targets(args.out)
+    print("  targets.conf (beside the data, as on a probe)")
     compress_one_day(args.out)
     print("  day 1 archived (.zst)")
 
@@ -374,9 +458,9 @@ def main() -> int:
     print()
     print("  # LT_PING_INTERVAL=1 because this generator samples once a second,")
     print("  # not five times. Without it the outage durations come out 5x short.")
+    print("  # No --targets: the matrix sits beside the data and is found there.")
     print("  LT_PING_INTERVAL=1 src/analyze/correlate.py \\")
-    print(f"      --ping-dir {args.out}/ping --waves {args.out}/waves.csv \\")
-    print("      --targets config/targets.conf.example")
+    print(f"      --ping-dir {args.out}/ping --waves {args.out}/waves.csv")
     return 0
 
 

@@ -14,6 +14,10 @@
 #   pcap ring buffers stay where they are (up to 500 MB each) and get fetched
 #   deliberately when a specific event needs them.
 #
+#   The probe's target matrix comes along, to $LT_BASE_DIR/<node>/targets.conf.
+#   Data and matrix are collected in different places and mean nothing apart:
+#   a table read against the wrong matrix is missing rows and says so nowhere.
+#
 # INVOCATION
 #   sync-node.sh <node>          pull from that node
 #   sync-node.sh <node> --dry-run
@@ -102,6 +106,24 @@ main() {
             rc=1
         fi
     done
+
+    # The probe's own target matrix, beside the data it describes.
+    #
+    # Without it, correlate.py has no way to know what this probe's labels mean
+    # and refuses to analyse the directory rather than silently apply the local
+    # matrix - which would drop every target only this probe measures, with no
+    # message and no exit code. probe-node.sh writes it to the probe's base
+    # directory for exactly this pull.
+    if rsync -az --timeout=60 "${args[@]}" \
+             "${NODE}:${REMOTE_BASE}/targets.conf" "${LOCAL_BASE}/targets.conf" \
+             2>/dev/null; then
+        log_info "$LOG_PREFIX target matrix pulled from $NODE"
+    else
+        # Not fatal: a probe may be running an older version, or a hand-built
+        # one. Say what the consequence is, because it surfaces later and
+        # somewhere else.
+        log_warning "$LOG_PREFIX $NODE has no ${REMOTE_BASE}/targets.conf - analysis of ${LOCAL_BASE} will need --targets"
+    fi
 
     if (( rc == 0 )); then
         log_success "$LOG_PREFIX $NODE synced (${SYNC_DIRS[*]})"

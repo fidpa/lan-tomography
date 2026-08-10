@@ -21,12 +21,32 @@ something in the unit takes precedence over the file.
 | `LT_BASE_DIR` | `/var/log/lan-tomography` | All measurement data. **Evidence, not logs** — a capture contains whatever crossed the wire. |
 | `LT_LOG_FILE` | `$LT_BASE_DIR/lan-tomography.log` | Operational log only. Nothing parses it. |
 | `LT_CONFIG` | `<repo>/config/lan-tomography.conf` | |
-| `LT_TARGETS` | `<repo>/config/targets.conf` | |
+| `LT_TARGETS` | `<repo>/config/targets.conf` | Applies to **this** machine's data directory only. `correlate.py` takes a `targets.conf` beside the directory it is analysing in preference, and refuses to analyse a foreign one without a matrix — see below. |
 | `LT_TCP_TARGETS` | `<repo>/config/tcp-targets.conf` | |
 | `LT_SECRETS` | unset | `KEY=value` lines. Read line by line, **never sourced**. `chmod 600`, outside the repository. |
 
 Derived and not settable individually: `LT_PING_DIR`, `LT_L2_DIR`,
 `LT_PKTRATE_DIR`, `LT_SWITCH_DIR`, `LT_CAPTURE_DIR`.
+
+### Which target matrix applies to which data
+
+`correlate.py` resolves the matrix from the data directory it is analysing, in
+this order:
+
+1. `--targets` on the command line. Always wins.
+2. `targets.conf` **beside** the data directory — `<ping-dir>/../targets.conf`.
+   `probe-node.sh` writes its own matrix into its base directory and
+   `sync-node.sh` pulls it, so a synced probe carries one automatically.
+3. `LT_TARGETS`, or `<repo>/config/targets.conf` — but **only** for
+   `$LT_BASE_DIR/ping`, the directory this installation itself describes.
+   `LT_TARGETS` arrives from an `EnvironmentFile`; it is ambient, not a
+   statement about somebody else's probe.
+4. Otherwise it stops, naming both remedies.
+
+The stop is deliberate. Target lists differ per probe — that is why a second
+probe exists — and applying the wrong one drops rows without a message and
+without an exit code. See
+[pitfall F9](../explanation/pitfalls.md#f9-a-target-missing-from-the-matrix-is-missing-from-the-table-not-from-the-network).
 
 | `LT_LOG_TO_STDOUT` | `true` | Set to anything else to keep the operational log out of stdout. Under systemd that means out of the journal's stdout capture too. |
 | `LT_LOG_TO_JOURNAL` | `true` | Set to anything else to skip the `logger` call. Useful on a probe with no journald. |

@@ -95,11 +95,17 @@ You get a verdict per window and a table showing which targets lost packets.
 cd /opt/lan-tomography
 examples/synthetic/generate.py --out /tmp/demo --days 4
 LT_PING_INTERVAL=1 src/analyze/correlate.py \
-    --ping-dir /tmp/demo/ping --waves /tmp/demo/waves.csv \
-    --targets config/targets.conf.example
+    --ping-dir /tmp/demo/ping --waves /tmp/demo/waves.csv
 ```
 
-Two windows, two different verdicts, and the reasoning for each.
+Two windows, two different verdicts, and the reasoning for each. No `--targets`
+is needed: the generator lays a `targets.conf` beside the data, the way a probe
+directory carries one, and the analysis finds it there.
+
+Read the two `L2:` lines at the bottom of each window against each other. One
+says `NO DATA`, the other counts topology-change BPDUs — the sample capture
+starts on day 3 on purpose, because a window nobody captured must not read like
+a window in which nothing happened.
 
 ## Next
 

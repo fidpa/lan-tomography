@@ -276,6 +276,20 @@ time without an offset**: the line claims a timezone the reader cannot
 determine. `LT_TZ` fixes it; set it the same everywhere and record which value
 you used.
 
+`correlate.py` reads this file: it counts the STP topology-change BPDUs inside
+each symptom window and prints them under the verdict. A path rebuilt at the
+second sessions tore down is a different statement from a path that merely lost
+packets, and it is the reason the capture exists.
+
+It looks for `l2/` **beside the data directory** — the same coupling the target
+matrix follows — so a probe's captures are read with that probe's ping logs and
+not with another machine's. `--l2-dir` overrides.
+
+A window with no lines at all reports `NO DATA`, never "no topology changes":
+the daily file is opened at midnight, so its existence says nothing about
+whether the capture was still running by the time your window came round. See
+[pitfall E7](../explanation/pitfalls.md#e7-a-capture-file-that-exists-is-not-a-capture-that-ran).
+
 The capture filters are narrow on purpose — a wide filter on a busy LAN fills a
 disk and collects user payloads. The cost is that **broadcast floods, multicast
 storms and unknown-unicast flooding are invisible here.** Use the packet-rate

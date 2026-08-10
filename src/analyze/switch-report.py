@@ -18,6 +18,9 @@ WHY A BASELINE, AND NOT JUST "DELTA > 0"
     The baseline is a MEDIAN, not a mean: one outlying minute would otherwise
     raise the bar enough to hide the excursion you are looking for.
 
+    The table carries each port's link speed for that reason - the caveat above
+    is unusable without it. Unknown prints as "?", never as 0.
+
 THREE POSSIBLE ANSWERS, ALL OF THEM USEFUL
     excursion         the switch discarded markedly more than usual during the
                       window - it is not exonerated
@@ -110,6 +113,41 @@ def port_deltas(rec: dict, counter: str) -> dict[str, int]:
         if isinstance(val, int):
             out[port] = val
     return out
+
+
+def describe_port(records: list[dict], port: str) -> str:
+    """Last known link speed of a port, for the table.
+
+    The header of this file tells the reader that discards are ordinary at a
+    gigabit-to-100-Mbit step. That caveat cannot be applied without the number
+    it applies to - and `switch-probe.py` has been collecting `ifSpeed` on
+    every sample all along, into every line of the timeline.
+
+    Read backwards, because the useful figure is the most recent one the agent
+    actually returned: a sample taken while the device was busy can carry the
+    port and omit its speed.
+
+    Unknown stays unknown. A speed the agent never gave is printed as "?", not
+    as 0 - the same rule the deltas follow one function down, and for the same
+    reason: a port of unknown speed and a port at a standstill are different
+    statements.
+    """
+    for rec in reversed(records):
+        data = rec.get("ports", {}).get(port)
+        if not data:
+            continue
+        speed = data.get("speed")
+        if not isinstance(speed, int) or speed <= 0:
+            continue
+        # ifSpeed is a 32-bit gauge and saturates: anything at or above
+        # 4.295 Gbit/s reports this exact value and the real figure is not in
+        # this data. Say so rather than print a wrong number.
+        if speed >= 4_294_967_295:
+            return ">4 Gbit"
+        if speed >= 1_000_000_000:
+            return f"{speed / 1_000_000_000:g} Gbit"
+        return f"{speed // 1_000_000} Mbit"
+    return "?"
 
 
 def analyse_wave(records: list[dict], wave: datetime, counter: str) -> dict | None:
@@ -247,12 +285,13 @@ def main() -> int:
         v, why = verdict(result)
         print(f"**{v}** - {why}\n")
         if result["findings"]:
-            print("| port | total | per sample | baseline (median) | factor |")
-            print("|---|---|---|---|---|")
+            print("| port | speed | total | per sample | baseline (median) | factor |")
+            print("|---|---|---|---|---|---|")
             for f in result["findings"][:8]:
                 factor = "inf" if f["factor"] == float("inf") else f"{f['factor']:.1f}x"
                 mark = "  **<-**" if f["spike"] else ""
-                print(f"| {f['port']} | {f['total']} | {f['per_min']:.1f} | "
+                print(f"| {f['port']} | {describe_port(records, f['port'])} | "
+                      f"{f['total']} | {f['per_min']:.1f} | "
                       f"{f['baseline']:.1f} | {factor}{mark} |")
         print(f"\n_{result['records']} samples in window, "
               f"{result['baseline_records']} in baseline._\n")

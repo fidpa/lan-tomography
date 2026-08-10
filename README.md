@@ -60,15 +60,18 @@ logic are the same either way.
   movements, from a ~70-line BER client. No agent, no package to install on a
   production box.
 - **Correlation with a verdict** — holds symptom windows against the ping matrix
-  and names the network *section* that can account for them.
+  and names the network *section* that can account for them, with the switch's
+  own STP topology changes for the same seconds printed underneath. The matrix
+  follows the data directory, so one probe's logs are never read against
+  another probe's target list.
 - **Switch discards against a baseline** — not against zero. A switch discards
   packets in normal operation; the excursion over its own median is the finding,
   and a window with sampling gaps is reported as inconclusive rather than quiet.
 - **ARP conflict detection** — one address answered from two MACs produces
   exactly the damage pattern of an intermittent fault, and both devices report
   themselves healthy.
-- **A pitfalls catalogue with tests** — 44 documented ways these measurements
-  mislead; 17 of them pinned by a named test.
+- **A pitfalls catalogue with tests** — 46 documented ways these measurements
+  mislead; 19 of them pinned by a named test.
 - **Synthetic sample data** — the analysis is demonstrable end to end without a
   single byte of anyone's real traffic.
 - **Liveness watching** — because a dead probe and a healthy network both
@@ -83,8 +86,7 @@ cd lan-tomography
 # See it work before installing anything
 examples/synthetic/generate.py --out /tmp/demo --days 4
 LT_PING_INTERVAL=1 src/analyze/correlate.py \
-    --ping-dir /tmp/demo/ping --waves /tmp/demo/waves.csv \
-    --targets config/targets.conf.example
+    --ping-dir /tmp/demo/ping --waves /tmp/demo/waves.csv
 ```
 
 Then [getting started](docs/tutorial/getting-started.md) for a real measurement.

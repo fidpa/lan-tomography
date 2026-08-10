@@ -112,3 +112,56 @@ def test_unknown_delta_is_skipped_not_read_as_zero(sr):
     rec = {"ports": {"5": {"d": {"out_discards": None}},
                      "23": {"d": {"out_discards": 7}}}}
     assert sr.port_deltas(rec, "out_discards") == {"23": 7}
+
+
+# ---------------------------------------------------------------------------
+# Port speed: collected all along, and until 0.2.0 never printed
+# ---------------------------------------------------------------------------
+
+
+def test_port_speed_is_reported_next_to_the_discards(sr):
+    """The caveat in this tool's own header needs this number to be usable.
+
+    "Discards are ordinary on a gigabit-to-100-Mbit step" cannot be applied to
+    a table that does not say which ports are on which step.
+    """
+    records = [{"ports": {"5": {"speed": 1_000_000_000},
+                          "23": {"speed": 100_000_000}}}]
+    assert sr.describe_port(records, "5") == "1 Gbit"
+    assert sr.describe_port(records, "23") == "100 Mbit"
+
+
+def test_unknown_port_speed_is_not_reported_as_zero(sr):
+    """A speed the agent never returned is unknown, not a stopped port.
+
+    The same rule the deltas follow: SNMP goes blind exactly when the device is
+    busy, and a blind sample must not print as a measured one.
+    """
+    records = [{"ports": {"5": {"descr": "uplink"}}}]
+    assert sr.describe_port(records, "5") == "?"
+    assert sr.describe_port([{"ports": {"5": {"speed": 0}}}], "5") == "?"
+    assert sr.describe_port([], "5") == "?"
+
+
+def test_port_speed_comes_from_the_last_sample_that_carried_one(sr):
+    """A later sample without the value must not erase an earlier one.
+
+    A sample taken while the switch was busy can carry the port and omit its
+    speed - that is a gap in the sample, not a change in the port.
+    """
+    records = [
+        {"ports": {"5": {"speed": 1_000_000_000}}},
+        {"ports": {"5": {"speed": 100_000_000}}},
+        {"ports": {"5": {"descr": "uplink"}}},
+    ]
+    assert sr.describe_port(records, "5") == "100 Mbit"
+
+
+def test_a_saturated_ifspeed_gauge_is_not_printed_as_a_speed(sr):
+    """ifSpeed is a 32-bit gauge: at 10 Gbit it reports 4294967295 and stops.
+
+    Printing "4 Gbit" for a 10-Gbit port is a confident wrong number, which is
+    the failure mode this whole repository is about.
+    """
+    records = [{"ports": {"49": {"speed": 4_294_967_295}}}]
+    assert sr.describe_port(records, "49") == ">4 Gbit"
