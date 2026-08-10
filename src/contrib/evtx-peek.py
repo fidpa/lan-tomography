@@ -517,7 +517,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--version", action="version",
-        version=f"{SCRIPT_NAME} {read_version()}",
+        version=f"lan-tomography {read_version()}",
     )
     return parser.parse_args(argv)
 

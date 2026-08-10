@@ -31,10 +31,16 @@
 #
 #   loop-detect   Ethertype 0x8899 - the loop-detection frames several vendors
 #                 (Realtek-based switches among them) emit every few seconds.
-#                 Each frame carries an identifier that changes per frame, so
-#                 the SAME identifier arriving twice is a copy, and a copy is a
-#                 closed loop. That test needs no flood and no traffic of your
-#                 own - see docs/explanation/proving-a-loop.md.
+#                 A useful record of which device speaks loop detection, when
+#                 it falls silent, and how that lines up with a surge.
+#                 DO NOT count repeated identifiers in these frames and read a
+#                 copy as a closed loop. That detector was built, believed and
+#                 WITHDRAWN: the bytes are not a per-frame identifier, the
+#                 source repeats the same value on its own cadence, and the
+#                 test returned its quiet baseline against a storm that had
+#                 already been proven. It was blind, not negative - see
+#                 docs/explanation/proving-a-loop.md, "the method that was
+#                 withdrawn".
 #                 Daily files, full frames: the identifier is in the payload.
 #
 #   roaming       Ethertype 0x890d - 802.11r Fast BSS Transition "over the DS",

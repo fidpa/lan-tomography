@@ -279,7 +279,7 @@ firmly at the wrong conclusion.
 
 ### D7. An address is not a device
 
-One address changed hands mid-campaign: the access point at `.43` was powered
+One address changed hands mid-campaign: the access point at `.11` was powered
 off, another device took the lease, and anyone checking "the AP" by address was
 measuring a stranger and reading its silence as the AP's. Track devices by MAC
 or by a proven identity, not by address.

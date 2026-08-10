@@ -9,8 +9,13 @@
 # event-watch.sh - report measurement events while they are happening
 #
 # PURPOSE
-#   Watches the incoming measurement data and reports floods, surges and target
-#   outages as they occur, rather than when somebody next runs an analysis.
+#   Watches the incoming packet-rate data and reports floods and surges as they
+#   occur, rather than when somebody next runs an analysis.
+#
+#   It does NOT watch target reachability. Nothing here reads the ping logs, so
+#   an outage passes it in silence; that is what liveness-check.sh and
+#   correlate.py are for. Said plainly because a watcher you believe covers
+#   outages is worse than no watcher at all.
 #
 #   The value is not the alert. It is being able to look at a fault WHILE it is
 #   happening - the difference between "we saw a gap yesterday" and "it is
@@ -68,11 +73,15 @@ readonly ALERT_COOLDOWN="${LT_ALERT_COOLDOWN:-3600}"
 declare -A SEEN=()
 
 scan_pktrate() {
-    local today
+    local today yesterday
     today="$(date +%F)"
+    yesterday="$(date -d 'yesterday' +%F)"
     local -a files=()
     local f
-    for f in "${LT_PKTRATE_DIR}"/*"${today}".log; do
+    # Yesterday's file too: an event that starts at 23:58 has its run-up in
+    # the previous day's file, and a watcher that only ever opens today's would
+    # report the tail of a flood as its whole extent.
+    for f in "${LT_PKTRATE_DIR}"/*"${yesterday}".log "${LT_PKTRATE_DIR}"/*"${today}".log; do
         [[ -f "$f" ]] && files+=("$f")
     done
     (( ${#files[@]} == 0 )) && return 0

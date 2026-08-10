@@ -42,7 +42,8 @@ The network belongs to the investigators' own organisation and is administered b
 an external service provider. Everything identifying is replaced, everything
 measured is unchanged, and the same entity keeps the same replacement throughout —
 otherwise the evidence chain falls apart. **Addresses** are reassigned by role in
-`192.168.10.0/24`: gateway `.1`, floor switch `.2`, core switches `.3`/`.4`, access
+`192.0.2.0/24` (RFC 5737, as everywhere else here): gateway `.1`, floor switch
+`.2`, core switches `.3`/`.4`, access
 points `.11`–`.14`, terminal server `.20`, hypervisor `.21`, probes `.31`–`.33`.
 **Dates are relative** — Day 1 is the day the measurement started and earlier days
 count backwards, with no Day 0; the campaign ran from the evening of Day 1 to Day

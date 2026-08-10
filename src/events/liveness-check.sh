@@ -101,7 +101,16 @@ main() {
     fi
 
     # 2. Freshness of the data that actually arrived here.
-    newest=$(find "${LT_BASE_DIR}" -name '*.log' -type f -printf '%T@\n' 2>/dev/null \
+    #
+    # -not -path "$LT_LOG_FILE" is load-bearing, not tidiness. This script logs
+    # into LT_BASE_DIR by default, and it writes on every run. Counting its own
+    # log as measurement data makes the newest file always fresher than the
+    # timer interval, so from the second run on the check can no longer fire -
+    # a liveness check that reports liveness because it ran. Measured with the
+    # shipped 30-minute timer against the 130-minute tolerance: permanently OK
+    # with every probe stopped.
+    newest=$(find "${LT_BASE_DIR}" -name '*.log' -type f \
+                  -not -path "${LT_LOG_FILE}" -printf '%T@\n' 2>/dev/null \
              | sort -rn | head -1 | cut -d. -f1)
     if [[ -z "$newest" ]]; then
         problems+=("no measurement data under ${LT_BASE_DIR}")

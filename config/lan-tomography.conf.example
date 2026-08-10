@@ -143,7 +143,7 @@ LT_FLOOD_MIN=10000
 # about 100 per 5 s, so 1500 is roughly fifteen times baseline.
 LT_SURGE_MIN=1500
 
-# Seconds without an ICMP reply before a target counts as down. Single lost
-# packets are normal; Windows guests under load drop them without anything
-# happening in the network.
-LT_GAP_SECONDS=2.5
+# NOTE: there is deliberately no LT_GAP_SECONDS here. An earlier draft carried
+# one, described exactly like the key below, and nothing read it - changing it
+# changed nothing and said so nowhere. LT_OUTAGE_THRESHOLD_S is the setting
+# that decides when a target counts as down.

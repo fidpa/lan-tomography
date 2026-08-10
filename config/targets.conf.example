@@ -90,7 +90,7 @@
 # ==========================================================================
 #
 # An address is not a device. During the campaign this came from, one address
-# changed hands mid-measurement: the access point that had been at .43 was
+# changed hands mid-measurement: the access point that had been at .11 was
 # powered off, a different device picked up the lease, and anyone checking the
 # AP by its address was measuring a stranger and reading its silence as the
 # AP's.

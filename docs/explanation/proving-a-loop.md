@@ -133,8 +133,8 @@ It looked sound. It ran. It produced:
 
 | Window | Factor |
 |---|---|
-| event window | 3.86 |
-| quiet window | 3.8 – 3.95 |
+| five event windows | 3.94, 3.83, 3.82, 3.81, 3.83 |
+| quiet baseline | 3.95 |
 
 The same number in both. Read naively, that is a clean negative: no excess of
 copies during the event, therefore no loop.

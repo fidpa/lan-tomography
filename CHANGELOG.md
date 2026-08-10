@@ -23,6 +23,78 @@ network, and one network is not enough to call an interface settled.
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-08-10
+
+An independent review against the internal originals this repository was
+extracted from. Four of its findings are defects that would have made a
+measurement quietly wrong — the class of fault this repository is about, found
+in the repository itself.
+
+### Fixed
+
+- **The liveness check counted its own log as measurement data.** It writes to
+  `LT_BASE_DIR` on every run, and the freshness scan took the newest `*.log`
+  under that directory. From the second run on it could not fire: with the
+  shipped 30-minute timer against a 130-minute tolerance, the check reported OK
+  with every probe stopped. Measured before and after the fix: 0 minutes of
+  apparent data age against the true 300.
+- **`compress-logs.sh` deleted the source with `zstd --rm`.** That removes the
+  original inside the same invocation, on nothing but zstd's own report of its
+  own run — and the comment above it claimed the removal happened only after
+  success. It is now compress, `zstd -t`, then remove, with the archive deleted
+  and the source kept if verification fails. A `flock` came back with it: the
+  timer and one hand-started run were enough to have two passes on the same
+  file.
+- **The `loop-detect` capture profile documented the withdrawn detector as
+  fact.** Its header stated that a repeated identifier in those frames is a
+  copy and a copy is a closed loop, and cited the chapter that refutes exactly
+  that. A reader following it would rebuild the test this project withdrew. The
+  header now says what the profile is good for and warns off the reading.
+- **An installed tree could not find its own configuration.** `install.sh` put
+  the config in `/etc/lan-tomography`, while `src/lib/common.sh` and the
+  `--targets` default of `correlate.py` and `tcp-probe.py` look under the
+  installation directory. Every tool run without explicit environment variables
+  therefore searched a directory that did not exist — the tutorial's own
+  commands among them. The installer now places the examples there and links the
+  live files, so the single editable copy stays in `/etc` and the documented
+  commands work verbatim. `VERSION` and `examples/` were not installed either,
+  so every tool reported its version as `unknown` and the tutorial's
+  synthetic-data step had nothing to run.
+- **The case study named a real private range as its anonymisation range**, in
+  the one paragraph explaining the anonymisation — while `CONTRIBUTING.md`
+  requires RFC 5737 and says "never a real address, even a private one", and
+  the rest of the repository uses `192.0.2.0/24` with the same host octets. It
+  now names the range actually in use, which makes "no address outside RFC 5737
+  anywhere in the repository" a check that can be run and stay at zero.
+- **Two places gave an access point's real last octet** (`.43`) where the
+  anonymisation scheme assigns `.11`, which the case study uses correctly
+  throughout. `.43` also belongs to a different host in the published scheme,
+  so the same short form meant two things.
+- **`event-watch.sh` promised outage detection it does not perform.** Nothing
+  in it reads the ping logs. It now says so, because a watcher believed to
+  cover outages is worse than none.
+- **`event-watch.sh` only ever opened the current day's packet-rate file**, so
+  an event starting before midnight was reported as its own tail.
+- **`LT_GAP_SECONDS` was a dead setting** in the example configuration:
+  documented as the outage threshold, read by nothing. `LT_OUTAGE_THRESHOLD_S`
+  is the one that decides.
+- **`LT_CAPTURE_DIR` was missing from the configuration reference**, the only
+  derived path of the five not listed.
+- **`contrib/evtx-peek.py --version` answered with its own script name** while
+  the other nineteen tools answer `lan-tomography <version>`. The number was
+  right; the prefix made the one check that asks every tool for its version
+  report a failure.
+- **The withdrawn detector's table conflated its event windows with its
+  validation run**, showing 3.86 as "the event window". The five event windows
+  were 3.94, 3.83, 3.82, 3.81 and 3.83 against a quiet baseline of 3.95; 3.86
+  is what it returned against the storm that exposed it.
+
+### Changed
+
+- CI now runs ShellCheck and `bash -n` over `install.sh`. It sits at the
+  repository root and was the one script outside the sweep — while being the
+  one that writes to `/etc/systemd/system`.
+
 ## [0.1.0] — 2026-08-10
 
 First release: the tools, the method, the pitfalls catalogue and the case study
@@ -44,8 +116,9 @@ become individually determinable, instead of collecting targets by gut feeling.
   deploy during an incident.
 - **`frame-capture.sh`** — targeted passive capture of one frame class, one
   profile per service instance: `broadcast` (names the source of a flood a
-  switch reports only as "behind port N"), `loop-detect` (ethertype 0x8899,
-  whose per-frame identifier arriving twice *is* a closed loop), `roaming`
+  switch reports only as "behind port N"), `loop-detect` (ethertype 0x8899 —
+  a record of who speaks loop detection and when they fall silent, *not* a
+  copy-counting circuit test; that reading was withdrawn), `roaming`
   (ethertype 0x890d, the 802.11r chatter that preceded surges by 0.1 to 4
   seconds), and `custom`.
 
@@ -156,5 +229,6 @@ become individually determinable, instead of collecting targets by gut feeling.
   generated from commit messages. Two gates come with it: the workflow fails if
   the section is missing or empty, and if the tag does not match `VERSION`.
 
-[Unreleased]: https://github.com/fidpa/lan-tomography/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/fidpa/lan-tomography/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/fidpa/lan-tomography/releases/tag/v0.1.1
 [0.1.0]: https://github.com/fidpa/lan-tomography/releases/tag/v0.1.0

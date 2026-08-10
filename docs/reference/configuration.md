@@ -26,14 +26,14 @@ something in the unit takes precedence over the file.
 | `LT_SECRETS` | unset | `KEY=value` lines. Read line by line, **never sourced**. `chmod 600`, outside the repository. |
 
 Derived and not settable individually: `LT_PING_DIR`, `LT_L2_DIR`,
-`LT_PKTRATE_DIR`, `LT_SWITCH_DIR`.
+`LT_PKTRATE_DIR`, `LT_SWITCH_DIR`, `LT_CAPTURE_DIR`.
 
 | `LT_LOG_TO_STDOUT` | `true` | Set to anything else to keep the operational log out of stdout. Under systemd that means out of the journal's stdout capture too. |
 | `LT_LOG_TO_JOURNAL` | `true` | Set to anything else to skip the `logger` call. Useful on a probe with no journald. |
 
 Set by the library and not meant to be configured: `LT_VERSION` (read from
 `VERSION`), `LT_LIB_DIR`, `LT_REPO_ROOT`, `LT_PING_DIR`, `LT_L2_DIR`,
-`LT_PKTRATE_DIR`, `LT_SWITCH_DIR`, `LT_COMMON_LOADED`.
+`LT_PKTRATE_DIR`, `LT_SWITCH_DIR`, `LT_CAPTURE_DIR`, `LT_COMMON_LOADED`.
 
 > **`LT_LOG_FILE` under `ProtectSystem=strict`:** if the path is not in
 > `ReadWritePaths`, the write fails **silently**. The tool then looks healthy

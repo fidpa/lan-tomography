@@ -154,6 +154,17 @@ run install -d -m 0750 -o "$RUN_USER" -g "$RUN_USER" "$DATA_DIR"
 say "copying tools"
 run cp -a "${SCRIPT_DIR}/src" "$PREFIX/"
 run cp -a "${SCRIPT_DIR}/README.md" "$PREFIX/"
+# VERSION is not decoration: the resolver in src/lib walks up from the script
+# it was called from, and without this file every tool reports "unknown".
+run cp -a "${SCRIPT_DIR}/VERSION" "$PREFIX/"
+# examples/ carries the synthetic data generator the tutorial runs in step 6.
+[[ -d "${SCRIPT_DIR}/examples" ]] && run cp -a "${SCRIPT_DIR}/examples" "$PREFIX/"
+# The .example files go alongside, because the tutorial passes
+# `--targets config/targets.conf.example` from $PREFIX.
+run install -d -m 0755 "$PREFIX/config"
+for ex in "${SCRIPT_DIR}"/config/*.example; do
+    [[ -f "$ex" ]] && run install -m 0644 "$ex" "$PREFIX/config/"
+done
 [[ -d "${SCRIPT_DIR}/docs" ]] && run cp -a "${SCRIPT_DIR}/docs" "$PREFIX/"
 
 # --- configuration -------------------------------------------------------
@@ -168,6 +179,20 @@ for example in "${SCRIPT_DIR}"/config/*.example; do
         say "installing $(basename "$target")"
         run install -m 0640 -o "$RUN_USER" -g "$RUN_USER" "$example" "$target"
     fi
+done
+
+# Make the live configuration reachable under the path the tools look in.
+#
+# This is not cosmetic. src/lib/common.sh resolves the config as
+# $LT_CONFIG or <repo root>/config/lan-tomography.conf, and correlate.py and
+# tcp-probe.py default their target matrix to <repo root>/config/targets.conf.
+# Installed, the repo root is $PREFIX - so without these links every tool run
+# without explicit environment variables looks for its configuration in a
+# directory that only holds .example files, and the tutorial's own commands
+# fail. The single editable copy stays in $CONFIG_DIR.
+for live in lan-tomography.conf targets.conf tcp-targets.conf; do
+    [[ -e "${CONFIG_DIR}/${live}" ]] || continue
+    run ln -sfn "${CONFIG_DIR}/${live}" "$PREFIX/config/${live}"
 done
 
 # --- units ---------------------------------------------------------------

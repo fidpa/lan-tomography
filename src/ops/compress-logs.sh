@@ -84,16 +84,36 @@ compress_one() {
         return 2
     fi
 
-    # --rm only after zstd has confirmed success. Losing measurement data to a
-    # full disk during compression would be a self-inflicted evidence gap.
-    if zstd -q --rm "$file" 2>/dev/null; then
-        return 0
+    # Compress, VERIFY, only then remove the source. Never `zstd --rm`: that
+    # deletes within the same invocation, on nothing but zstd's own report of
+    # its own run. A measurement day was lost that way once - the archive
+    # existed, the source was gone, and the archive did not read back. `zstd -t`
+    # between the two steps is what makes the deletion safe, and it is the
+    # entire point of this function.
+    if ! zstd -q "$file" 2>/dev/null; then
+        log_error "$LOG_PREFIX compression failed: $file"
+        rm -f "${file}.zst"
+        return 1
     fi
-    log_error "$LOG_PREFIX compression failed: $file"
-    return 1
+    if ! zstd -q -t "${file}.zst" 2>/dev/null; then
+        log_error "$LOG_PREFIX archive does not verify, source kept: ${file}.zst"
+        rm -f "${file}.zst"
+        return 1
+    fi
+    rm -f "$file"
+    return 0
 }
 
 main() {
+    # One run at a time. The timer and a hand-started run overlapping means two
+    # processes compressing the same file: the second finds the source gone
+    # mid-flight, or writes over an archive the first is still producing.
+    exec 200>"${LT_BASE_DIR}/.compress-logs.lock" 2>/dev/null || true
+    flock -n 200 || {
+        log_info "$LOG_PREFIX another run holds the lock - skipping"
+        return 0
+    }
+
     log_info "$LOG_PREFIX compressing completed measurement days"
     [[ "$DRY_RUN" == "true" ]] && log_info "$LOG_PREFIX DRY-RUN: nothing will be changed"
 
