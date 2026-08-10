@@ -1,0 +1,150 @@
+#!/bin/bash
+# ---
+# deployment: systemd-service
+# service: lt-compress-logs.service
+# timer: lt-compress-logs.timer
+# status: active
+# type: oneshot
+# requires_root: false
+# ---
+# compress-logs.sh - compress completed measurement days with zstd
+#
+# PURPOSE
+#   A continuous measurement produces a lot of text. Ping logs at five packets
+#   a second are around 100 MB per target per day; zstd takes that to roughly a
+#   fifteenth. Without this, a campaign fills the disk in about a week and the
+#   measurement stops - during the incident you are trying to record.
+#
+# THE RULE THAT MATTERS
+#   Only files for days that are OVER, and only files nobody has open. A
+#   compressed file that a running `ping` still holds open keeps its inode
+#   alive: the disk is not freed, and the writer carries on into a file that no
+#   longer has a name.
+#
+#   The analysis tools read .log and .log.zst transparently, so compression is
+#   invisible downstream. That is not a nicety - a plain glob("*.log") silently
+#   skips archived days, and the analysis then runs on less data with no error
+#   and no exit code. See log_files() in src/analyze/correlate.py.
+#
+# INVOCATION
+#   compress-logs.sh             compress completed days
+#   compress-logs.sh --dry-run   show what would happen, change nothing
+#   compress-logs.sh --help      this text
+#
+# CONFIGURATION (environment or config/lan-tomography.conf)
+#   LT_BASE_DIR          where measurement data lives
+#   LT_ALERT_CMD         where a failure alert goes
+#   LT_ALERT_COOLDOWN    seconds between repeats of the same alert
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+readonly SCRIPT_DIR
+
+# shellcheck source=../lib/common.sh
+source "${SCRIPT_DIR}/../lib/common.sh" || exit 1
+
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { lt_usage "$0"; exit 0; }
+
+readonly LOG_PREFIX="[compress]"
+DRY_RUN=false
+[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
+readonly DRY_RUN
+
+TODAY="$(date +%F)"
+readonly TODAY
+readonly ALERT_COOLDOWN="${LT_ALERT_COOLDOWN:-3600}"
+
+# Subdirectories holding daily files worth compressing.
+readonly -a DATA_DIRS=(ping l2 pktrate tcp)
+
+is_open() {
+    # A file still held open by a running process must not be touched.
+    # lsof is not installed everywhere; /proc is, on any Linux this runs on.
+    local target="$1" link
+    for link in /proc/[0-9]*/fd/*; do
+        [[ -e "$link" ]] || continue
+        if [[ "$(readlink -f "$link" 2>/dev/null)" == "$target" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+compress_one() {
+    local file="$1"
+
+    if [[ -f "${file}.zst" ]]; then
+        log_info "$LOG_PREFIX archive already exists, skipped: $(basename "$file")"
+        return 2
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "$LOG_PREFIX would compress: $(basename "$file")"
+        return 2
+    fi
+
+    # --rm only after zstd has confirmed success. Losing measurement data to a
+    # full disk during compression would be a self-inflicted evidence gap.
+    if zstd -q --rm "$file" 2>/dev/null; then
+        return 0
+    fi
+    log_error "$LOG_PREFIX compression failed: $file"
+    return 1
+}
+
+main() {
+    log_info "$LOG_PREFIX compressing completed measurement days"
+    [[ "$DRY_RUN" == "true" ]] && log_info "$LOG_PREFIX DRY-RUN: nothing will be changed"
+
+    if ! command -v zstd >/dev/null 2>&1; then
+        log_error "$LOG_PREFIX zstd is not installed"
+        return 1
+    fi
+
+    if [[ ! -d "$LT_BASE_DIR" ]]; then
+        log_info "$LOG_PREFIX $LT_BASE_DIR does not exist - nothing to do"
+        return 0
+    fi
+
+    local before_mb after_mb
+    before_mb=$(du -sm "$LT_BASE_DIR" 2>/dev/null | cut -f1)
+
+    local done_count=0 fail_count=0 skip_count=0
+    local dir file
+    for dir in "${DATA_DIRS[@]}"; do
+        [[ -d "${LT_BASE_DIR}/${dir}" ]] || continue
+        for file in "${LT_BASE_DIR}/${dir}"/*.log; do
+            [[ -f "$file" ]] || continue
+            # Today's file is still being written to.
+            [[ "$file" == *"$TODAY"* ]] && continue
+            if is_open "$file"; then
+                log_info "$LOG_PREFIX in use, skipped: $(basename "$file")"
+                skip_count=$((skip_count + 1))
+                continue
+            fi
+            compress_one "$file"
+            case $? in
+                0) done_count=$((done_count + 1)) ;;
+                1) fail_count=$((fail_count + 1)) ;;
+                2) skip_count=$((skip_count + 1)) ;;
+            esac
+        done
+    done
+
+    after_mb=$(du -sm "$LT_BASE_DIR" 2>/dev/null | cut -f1)
+    log_success "$LOG_PREFIX done: $done_count compressed, $skip_count skipped, $fail_count failed"
+    log_info "$LOG_PREFIX ${before_mb} MB -> ${after_mb} MB (freed: $((before_mb - after_mb)) MB)"
+
+    if (( fail_count > 0 )); then
+        lt_alert_once "compress_failed" "$ALERT_COOLDOWN" \
+            "compression failed for $fail_count file(s)" \
+            "$(printf 'Compressing completed measurement days produced %d error(s).\n\nsucceeded : %d\nskipped   : %d\ndirectory : %s (%s MB)\n\nThe affected source files were NOT deleted - no measurement data is lost,\nbut the disk is not being freed either. A full disk stops the measurement.\n\nCheck: journalctl -u lt-compress-logs.service -n 50\n       df -h %s\n' \
+                     "$fail_count" "$done_count" "$skip_count" "$LT_BASE_DIR" "$after_mb" "$LT_BASE_DIR")"
+        return 1
+    fi
+
+    return 0
+}
+
+main "$@"

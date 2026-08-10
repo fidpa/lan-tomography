@@ -1,0 +1,59 @@
+# Publishing assets — not part of the repo
+LINKEDIN_POST.md
+
+# Claude Code working files — private, never published
+CLAUDE.md
+.claude/
+TODO.md
+NOTES.md
+*_POST.md
+*_TEMPLATE.md
+*.private
+*.draft
+docs/intern
+
+# Local config overrides and secrets — never commit
+*.local
+.env
+.env.local
+.env.secrets
+config/*.conf
+!config/*.conf.example
+
+# Measurement output — never commit captures or logs
+*.pcap
+*.pcap.gz
+*.log
+*.log.zst
+waves.csv
+switch-timeline.jsonl
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Build / test
+*.tmp
+coverage/
+.bats-cache/
+
+# Backups created by editors
+*~
+*.bak
+
+# Nextcloud/Rclone symlinks
+*.rclonelink
+.venv/

@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run shellcheck
+        run: |
+          # -r so an empty tree is not an error while the repo is still filling up.
+          find src examples -name '*.sh' -type f -print0 \
+            | xargs -0 -r shellcheck -x --severity=warning
+
+  ruff:
+    name: ruff (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Install ruff
+        run: pip install ruff
+      - name: Lint Python sources
+        run: ruff check .
+
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Install optional dependencies
+        # requirements.txt is optional at runtime (src/contrib/ only), but
+        # installing it here is what makes the contrib tests actually run.
+        # Without it they skip themselves and CI reports green for a file it
+        # never imported.
+        run: pip install -r requirements.txt
+      - name: Install zstd
+        # Four tests cover the "compressed archive days are silently skipped"
+        # pitfall and skip themselves without it.
+        run: sudo apt-get update && sudo apt-get install -y zstd
+      - name: Run test suite
+        run: pytest tests/ -v
+
+  syntax-check:
+    name: Syntax validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Bash syntax
+        run: |
+          find src examples -name '*.sh' -type f -print0 \
+            | xargs -0 -r -n1 bash -n
+      - name: Python syntax
+        run: |
+          find src examples tests -name '*.py' -type f -print0 \
+            | xargs -0 -r -n1 python3 -m py_compile
+
+  systemd-units:
+    name: systemd unit templates parse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify units parse
+        run: |
+          # The shipped units carry placeholders that systemd-analyze would
+          # reject. Substitute the checkout itself, so the ExecStart paths
+          # actually exist and the check verifies something real rather than
+          # just the INI syntax.
+          shopt -s nullglob
+          units=(systemd/*.service systemd/*.timer)
+          if [ ${#units[@]} -eq 0 ]; then
+            echo "no units yet - nothing to verify"; exit 0
+          fi
+          mkdir -p /tmp/units
+          for u in "${units[@]}"; do
+            sed -e "s|__INSTALL_DIR__|${GITHUB_WORKSPACE}|g" \
+                -e "s|__CONFIG_DIR__|${GITHUB_WORKSPACE}/config|g" \
+                -e 's|__BASE_DIR__|/tmp/lan-tomography|g' \
+                -e "s|__USER__|$(id -un)|g" \
+                -e "s|__PYTHON__|$(command -v python3)|g" \
+                "$u" > "/tmp/units/$(basename "$u")"
+          done
+          chmod +x src/*/*.sh src/*/*.py 2>/dev/null || true
+          systemd-analyze verify /tmp/units/* 2>&1 | tee /tmp/verify.log
+
+          # systemd-analyze also walks the host's own units and reports what it
+          # cannot read; those lines are noise here. Only complaints naming one
+          # of OUR units count.
+          if grep -E '^/tmp/units/|^lt-' /tmp/verify.log \
+             | grep -vE 'Unknown lvalue|Failed to open /etc/systemd' \
+             | grep -q .; then
+            echo "systemd-analyze reported problems in lan-tomography units"
+            exit 1
+          fi
+          echo "all ${#units[@]} unit templates parse"

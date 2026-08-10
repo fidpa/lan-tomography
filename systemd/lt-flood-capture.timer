@@ -1,0 +1,16 @@
+[Unit]
+# Every two minutes. Short enough that the ring still holds the event when the
+# pass runs, long enough that the load on the probe stays negligible.
+Description=lan-tomography: schedule for lt-flood-capture.service
+
+[Timer]
+# OnCalendar rather than OnUnitActiveSec: the latter loses its anchor with
+# Type=oneshot + RemainAfterExit=no. OnCalendar is stateless and predictable;
+# overlap is prevented by the script's own flock.
+OnCalendar=*:0/2
+Persistent=true
+# Roughly a tenth of the interval.
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,33 @@
+[Unit]
+Description=lan-tomography: packet rates by unicast/broadcast/multicast
+Documentation=file://__INSTALL_DIR__/docs/reference/log-formats.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__USER__
+EnvironmentFile=-__CONFIG_DIR__/lan-tomography.conf
+ExecStart=__INSTALL_DIR__/src/probes/pktrate.sh
+Restart=always
+RestartSec=10
+
+# Reads kernel counters only - no capture, no raw socket.
+NoNewPrivileges=yes
+
+# Hardening: the tools write only under the measurement directory.
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__BASE_DIR__
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+Nice=10
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

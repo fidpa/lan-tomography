@@ -1,0 +1,49 @@
+[Unit]
+# One capture profile. Instance name = profile: broadcast, loop-detect,
+# roaming. Start as many as you need:
+#
+#   systemctl enable --now lt-frame-capture@broadcast.service
+#   systemctl enable --now lt-frame-capture@roaming.service
+#
+# The `custom` profile needs a --filter and therefore a drop-in rather than a
+# bare instance; see src/probes/frame-capture.sh --help.
+Description=lan-tomography: frame capture, profile %i
+Documentation=file://__INSTALL_DIR__/src/probes/frame-capture.sh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__USER__
+EnvironmentFile=-__CONFIG_DIR__/lan-tomography.conf
+ExecStart=__INSTALL_DIR__/src/probes/frame-capture.sh --profile %i
+
+# The capture must not be missing during the one event it exists to record.
+Restart=always
+RestartSec=10
+
+# tcpdump needs both: RAW to open the socket, ADMIN for promiscuous mode.
+#
+# NoNewPrivileges is deliberately NOT set here: it suppresses the ambient
+# capability, and there is no unprivileged fallback for AF_PACKET. The unit
+# would start, look healthy, and capture nothing.
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__BASE_DIR__
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+# The ring profile caps its own disk use; MemoryMax caps the in-RAM buffer.
+# Daily profiles do not cap disk - see the script header before enabling one.
+Nice=10
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

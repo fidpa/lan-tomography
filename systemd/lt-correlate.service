@@ -1,0 +1,24 @@
+[Unit]
+Description=lan-tomography: hold symptom windows against the ping matrix
+Documentation=file://__INSTALL_DIR__/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__USER__
+Group=__USER__
+EnvironmentFile=-__CONFIG_DIR__/lan-tomography.conf
+ExecStart=__PYTHON__ __INSTALL_DIR__/src/analyze/correlate.py
+
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__BASE_DIR__
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+NoNewPrivileges=yes
+Nice=10
+MemoryMax=256M

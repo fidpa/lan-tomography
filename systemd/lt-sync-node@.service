@@ -1,0 +1,30 @@
+[Unit]
+# Pull measurement data from one probe. Instance name = SSH destination.
+Description=lan-tomography: pull measurement data from probe %i
+Documentation=file://__INSTALL_DIR__/docs/how-to/deploy-a-probe-node.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__USER__
+Group=__USER__
+EnvironmentFile=-__CONFIG_DIR__/lan-tomography.conf
+ExecStart=__INSTALL_DIR__/src/ops/sync-node.sh %i
+
+# Exit 75 = the probe was unreachable. Transient, and the next run catches up.
+# Without this a probe that reboots leaves a permanently failed unit, and a
+# permanently failed unit is one people stop reading.
+SuccessExitStatus=75
+
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__BASE_DIR__
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+NoNewPrivileges=yes
+Nice=10
+MemoryMax=256M

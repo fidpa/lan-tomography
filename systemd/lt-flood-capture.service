@@ -1,0 +1,31 @@
+[Unit]
+# Copies the broadcast ring out of harm's way when an event fires. The ring
+# holds hours, not days; anything nobody notices in that time is overwritten.
+Description=lan-tomography: keep the ring capture on a rate or precursor event
+Documentation=file://__INSTALL_DIR__/src/events/flood-capture.sh
+
+[Service]
+# Type=oneshot with RemainAfterExit=no, stated explicitly rather than left to
+# the default: without the pair, the timer cannot trigger the unit again.
+Type=oneshot
+RemainAfterExit=no
+User=__USER__
+Group=__USER__
+EnvironmentFile=-__CONFIG_DIR__/lan-tomography.conf
+ExecStart=__INSTALL_DIR__/src/events/flood-capture.sh
+
+# Restart=no is mandatory for a oneshot under a timer: a restarting oneshot
+# never reaches a failed state, so a broken watcher never alerts.
+Restart=no
+
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__BASE_DIR__
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+Nice=10
+MemoryMax=256M

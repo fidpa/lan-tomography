@@ -1,0 +1,31 @@
+[Unit]
+Description=lan-tomography: TCP connection establishment measurement
+Documentation=file://__INSTALL_DIR__/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__USER__
+EnvironmentFile=-__CONFIG_DIR__/lan-tomography.conf
+ExecStart=__PYTHON__ __INSTALL_DIR__/src/probes/tcp-probe.py
+Restart=always
+RestartSec=10
+NoNewPrivileges=yes
+
+# Hardening: the tools write only under the measurement directory.
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__BASE_DIR__
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+Nice=10
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

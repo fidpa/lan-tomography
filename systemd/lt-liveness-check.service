@@ -1,0 +1,24 @@
+[Unit]
+Description=lan-tomography: verify the measurement chain is alive
+Documentation=file://__INSTALL_DIR__/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__USER__
+Group=__USER__
+EnvironmentFile=-__CONFIG_DIR__/lan-tomography.conf
+ExecStart=__INSTALL_DIR__/src/events/liveness-check.sh --report
+
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__BASE_DIR__
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+NoNewPrivileges=yes
+Nice=10
+MemoryMax=256M

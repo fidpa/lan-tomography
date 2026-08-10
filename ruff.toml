@@ -1,0 +1,37 @@
+# Pinned so local runs and CI agree. Without this, a new ruff release changes
+# what "clean" means, and the first person to notice is whoever opens a pull
+# request that suddenly fails.
+
+target-version = "py311"
+line-length = 100
+
+exclude = ["_source", ".venv", "_tools"]
+
+[lint]
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes
+    "I",           # import sorting
+    "UP",          # pyupgrade
+    "B",           # bugbear
+    "C4",          # comprehensions
+    "DTZ",         # naive datetimes - this project has lost days to timezones
+    "ISC",         # implicit string concatenation: a missing comma in a tuple
+                   # concatenates silently, which is exactly the class of
+                   # invisible error this repository is about
+    "PIE",
+    "RUF",
+]
+ignore = [
+    "E501",        # line length is handled by the formatter, not enforced here
+    "RUF007",      # zip(x, x[1:]) reads better than pairwise() for these windows
+    "RUF005",      # `base + [1]` is clearer than `[*base, 1]` when the point is
+                   # "this OID plus one arc"
+    "B905",        # zip(strict=) - the sliding-window zips here are meant to be
+                   # one shorter, which is the whole idea
+]
+
+[lint.per-file-ignores]
+# Tests reach into module internals on purpose - that is what pins the merge
+# decisions in src/lib/snmp.py.
+"tests/*" = ["S101", "SLF001"]

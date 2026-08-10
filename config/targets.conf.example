@@ -1,0 +1,127 @@
+# Target matrix — <IP> <label> <role>
+#
+# Copy to config/targets.conf and replace with your own topology. The addresses
+# below are RFC 5737 documentation addresses and will not work anywhere.
+#
+# This file is the measurement. The tools are just what carries it out.
+#
+# ==========================================================================
+# WHY A MATRIX AND NOT A LIST
+# ==========================================================================
+#
+# Treat every measured path as the sum of the segments it crosses. With p
+# probes and t targets you get p x t path measurements over some number of
+# unknown segments — a linear system, A x = b. What you can determine is not
+# "how many targets did I ping" but the RANK of that system.
+#
+# This has a practical consequence that is easy to get wrong: adding more
+# targets BEHIND the same bottleneck adds rows to A without adding rank. Ten
+# servers in one rack, measured from one probe, tell you about one uplink.
+#
+# In the campaign this repository came from, three probes and eight targets
+# produced rank 9 against 11 segments: two quantities stayed indeterminable no
+# matter how long the measurement ran, and exactly ONE segment was individually
+# determinable. Adding a target that TERMINATES ON A SWITCH — the switch's own
+# management address — raised the rank to 10 and made four segments individually
+# determinable, including the prime suspect. Adding the remaining switches
+# brought it to 12-13 of 14.
+#
+# So: before you start, ask which segments you want separated, and check
+# whether your matrix separates them. A target that shares its entire path with
+# a target you already have is worth almost nothing.
+#
+# ==========================================================================
+# ROLES
+# ==========================================================================
+#
+# The role is what turns a set of measurements into a verdict. It says what an
+# outage of THIS target rules in and rules out.
+#
+#   symptom      The host that shows the reported problem. Everything is
+#                measured relative to this one.
+#
+#   same-host    Shares the symptom's physical host, but not its VM. Fails
+#                together with the symptom -> the host or its virtual switch.
+#                Symptom fails alone -> inside the symptom's own VM.
+#
+#   other-host   Different physical host, same network. Separates "this host"
+#                from "this network".
+#
+#   fabric-ref   An ordinary endpoint deep in the network, usually the gateway.
+#                Loss here means the shared path, not any one device.
+#
+#   uplink-ref   A target reachable only across the uplink between segments.
+#                Separates "my floor" from "everything above it".
+#
+#   client-path  A workstation on the path real users take. The only role that
+#                measures what users actually experience; everything else
+#                measures what the servers experience.
+#
+#   switch-ref   A switch's own management address. READ THE WARNING BELOW.
+#
+# ==========================================================================
+# WARNING: switch-ref carries no verdict, on purpose
+# ==========================================================================
+#
+# A switch answers ICMP from its management CPU, not from its forwarding path.
+# Under load that CPU delays or discards replies while traffic passes through
+# the device untouched. Scored as an ordinary reference, that produces a
+# confident "the network is broken" verdict from a device that was forwarding
+# perfectly.
+#
+# Measured, not assumed: in one hour of monitoring, switch targets produced
+# apparent outages of up to 24 seconds while EVERY target BEHIND the same
+# switch stayed clean in the same window, and other probes saw the same switch
+# answering normally at the same moment. Three probes at 5 packets/s each is 15
+# packets/s arriving at a CPU that was not built for it. We were measuring our
+# own polling.
+#
+# The visible tell is scatter: the same probe measured 1.6-5.5 ms to the switch
+# and 0.6 ms to ordinary hosts in the same segment.
+#
+# Therefore switch-ref is excluded from the judgement matrix. When only
+# switch-ref targets fail, the correlator reports "OUTAGE OUTSIDE THE JUDGEMENT
+# MATRIX" rather than silently calling the network clean. Keep these targets —
+# they raise the rank and they are how you see the switch itself — but never
+# let one decide anything.
+#
+# ==========================================================================
+# PROVE IDENTITY, DO NOT INFER IT
+# ==========================================================================
+#
+# An address is not a device. During the campaign this came from, one address
+# changed hands mid-measurement: the access point that had been at .43 was
+# powered off, a different device picked up the lease, and anyone checking the
+# AP by its address was measuring a stranger and reading its silence as the
+# AP's.
+#
+# Establish identity from LLDP chassis IDs, TLS certificates or HTTP banners.
+# Never from the MAC OUI: the vendor is a hint, not an identity.
+#
+# ==========================================================================
+
+# <IP>         <label>      <role>
+
+# --- the symptom and its neighbours -------------------------------------
+192.0.2.20     ts01         symptom
+192.0.2.21     hv01         hypervisor
+192.0.2.41     mail01       same-host
+192.0.2.42     dc01         same-host
+192.0.2.43     vm01         other-host
+192.0.2.44     sql01        other-host
+
+# --- shared path --------------------------------------------------------
+192.0.2.1      gw           fabric-ref
+192.0.2.45     scan01       fabric-ref
+
+# --- across the uplink --------------------------------------------------
+192.0.2.33     probe3       uplink-ref
+
+# --- what users actually traverse ---------------------------------------
+192.0.2.51     ws01         client-path
+192.0.2.52     ws02         client-path
+
+# --- switches: raise the rank, carry no verdict (see warning above) -----
+192.0.2.2      sw-floor     switch-ref
+192.0.2.3      sw-core-a    switch-ref
+192.0.2.4      sw-core-b    switch-ref

@@ -1,0 +1,11 @@
+# ShellCheck configuration for lan-tomography
+shell=bash
+
+# Resolve `source` relative to the sourcing script's directory.
+source-path=SCRIPTDIR
+external-sources=true
+
+# SC1090/SC1091: sourced paths are resolved at runtime from the config layer;
+# ShellCheck cannot follow them statically. Every real source directive carries
+# an explicit `# shellcheck source=` annotation where a static path exists.
+disable=SC1090,SC1091

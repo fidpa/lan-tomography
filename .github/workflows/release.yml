@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The release body is the CHANGELOG section for this version, not
+      # generated commit notes. Two reasons: the changelog is where the
+      # reasoning lives, and generated notes drift from it the moment a commit
+      # message says less than the entry does.
+      - name: Extract the changelog section
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+
+          # Cut from this version's heading to the next "## [" heading.
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            /^## \[/               { found = 0 }
+            found
+          ' CHANGELOG.md > /tmp/notes.md
+
+          # An empty body would publish a release that says nothing, and
+          # nobody notices until somebody opens the page. Fail instead.
+          if [ ! -s /tmp/notes.md ]; then
+            echo "::error::no CHANGELOG section for ${version} - expected a heading '## [${version}] — YYYY-MM-DD'"
+            exit 1
+          fi
+
+          echo "Extracted $(wc -l < /tmp/notes.md) lines for ${version}"
+          head -5 /tmp/notes.md
+
+      - name: Verify the tag matches VERSION
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          in_file="$(tr -d '[:space:]' < VERSION)"
+          if [ "$version" != "$in_file" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match VERSION (${in_file})"
+            exit 1
+          fi
+          echo "tag and VERSION agree: ${version}"
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          body_path: /tmp/notes.md
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

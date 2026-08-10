@@ -1,0 +1,48 @@
+# TCP probe targets — <IP> <port> <interval-seconds> <label> <role>
+#
+# Copy to config/tcp-targets.conf. Addresses below are RFC 5737 documentation
+# addresses and will not work anywhere.
+#
+# ==========================================================================
+# THIS IS NOT A PORT SCAN
+# ==========================================================================
+#
+# Each line opens ONE connection to ONE known port at a fixed, slow interval,
+# to measure whether a TCP handshake completes and how long it takes. It never
+# enumerates ports and never touches a host that is not listed here.
+#
+# The distinction matters operationally, not just ethically: a scan on somebody
+# else's production network is an incident, and you will spend the rest of the
+# investigation explaining it instead of doing it.
+#
+# ==========================================================================
+# WHY TCP IN ADDITION TO ICMP
+# ==========================================================================
+#
+# ICMP tells you whether packets cross. It does not tell you whether a session
+# survives. Some faults drop sessions while individual packets keep flowing —
+# and some drop packets without a single session noticing. Measuring both is
+# how you tell those apart, and in the campaign this came from, the two
+# genuinely decoupled: an outage that took the gateway away for five minutes
+# left every LAN target at zero loss.
+#
+# ==========================================================================
+# THE INTERVAL IS NOT A PERFORMANCE SETTING
+# ==========================================================================
+#
+# Probe slowly enough that you do not change what you are measuring.
+#
+# The concrete case that set the 15-second interval below: every connection to
+# a Windows Remote Desktop port writes an entry to that host's own connection
+# log, and that log is a ring buffer. Probing it every two seconds would have
+# rotated away the very evidence the investigation depended on — the tool would
+# have destroyed its own case, slowly, while appearing to work.
+#
+# Ask, for every target: what does connecting to this cost the target?
+
+# <IP>        <port>  <interval>  <label>        <role>
+192.0.2.20    3389    15          ts01-rdp       symptom
+192.0.2.20    445     2           ts01-smb       symptom-alt
+192.0.2.44    1433    2           sql01-mssql    other-host
+192.0.2.45    22      2           scan01-ssh     fabric-ref
+192.0.2.33    22      2           probe3-ssh     fabric-ref

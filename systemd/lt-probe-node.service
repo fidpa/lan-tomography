@@ -1,0 +1,37 @@
+[Unit]
+# Everything a remote probe runs: one ping loop per target, an STP text log and
+# a pcap ring buffer, in a single process.
+Description=lan-tomography: probe node
+Documentation=file://__INSTALL_DIR__/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__USER__
+EnvironmentFile=-__CONFIG_DIR__/lan-tomography.conf
+ExecStart=__INSTALL_DIR__/src/node/probe-node.sh
+Restart=always
+RestartSec=10
+
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__BASE_DIR__
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+# NOTE: systemd cannot see a single dead ping loop inside this process - the
+# unit stays "active (running)" as long as the capture lives. That is why
+# lt-liveness-check exists, and why it is not optional on a probe node.
+Nice=10
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

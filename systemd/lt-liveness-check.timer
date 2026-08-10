@@ -1,0 +1,13 @@
+[Unit]
+Description=lan-tomography: schedule for lt-liveness-check.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=30min
+# A missed run must be caught up: a gap in the timeline is indistinguishable
+# from a quiet period.
+Persistent=true
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

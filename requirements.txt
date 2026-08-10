@@ -1,0 +1,4 @@
+# Optional — only needed for src/contrib/ (Windows event-log tooling).
+# The network-side core runs on the Python standard library alone.
+python-evtx>=0.7.4
+impacket>=0.11.0

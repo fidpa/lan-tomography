@@ -1,0 +1,13 @@
+[Unit]
+Description=lan-tomography: schedule for lt-fdb-probe.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+# A missed run must be caught up: a gap in the timeline is indistinguishable
+# from a quiet period.
+Persistent=true
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

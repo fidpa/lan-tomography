@@ -1,0 +1,35 @@
+[Unit]
+Description=lan-tomography: passive layer-2 capture (STP, ARP)
+Documentation=file://__INSTALL_DIR__/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__USER__
+EnvironmentFile=-__CONFIG_DIR__/lan-tomography.conf
+ExecStart=__INSTALL_DIR__/src/probes/l2-sniffer.sh
+Restart=always
+RestartSec=10
+
+# tcpdump needs both: RAW to open the socket, ADMIN to put the interface into
+# promiscuous mode.
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+
+# Hardening: the tools write only under the measurement directory.
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__BASE_DIR__
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+Nice=10
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

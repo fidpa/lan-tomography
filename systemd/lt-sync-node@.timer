@@ -1,0 +1,13 @@
+[Unit]
+Description=lan-tomography: schedule for lt-sync-node@%i.service
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+# A missed run must be caught up: a gap in the collected data is
+# indistinguishable from a quiet period on the probe.
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

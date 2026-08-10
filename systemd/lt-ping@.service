@@ -1,0 +1,44 @@
+[Unit]
+# Continuous ICMP measurement of one target. Instance name = target address.
+# Roles and targets: config/targets.conf
+Description=lan-tomography: continuous ping to %i
+Documentation=file://__INSTALL_DIR__/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__USER__
+EnvironmentFile=-__CONFIG_DIR__/lan-tomography.conf
+ExecStart=__INSTALL_DIR__/src/probes/ping-target.sh %i
+
+# The measurement must not break off - a gap in the log is indistinguishable
+# from a real outage.
+Restart=always
+RestartSec=5
+
+# ping opens a raw ICMP socket. It usually carries the file capability
+# cap_net_raw=ep, but NoNewPrivileges=yes would prevent that from taking
+# effect, and there is no unprivileged fallback when
+# net.ipv4.ping_group_range is empty ("1 0"). The capability is therefore
+# granted ambiently INSTEAD of setting NoNewPrivileges.
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+
+# Hardening: the tools write only under the measurement directory.
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__BASE_DIR__
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+# Long-running with a minimal footprint.
+Nice=10
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

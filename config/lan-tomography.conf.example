@@ -1,0 +1,149 @@
+# lan-tomography configuration
+#
+# Copy to config/lan-tomography.conf and edit. Every value can also be set in
+# the environment, which wins over this file - that lets a systemd unit
+# override one setting without a second config file.
+#
+# This file is sourced by bash. Keep it to assignments.
+
+# --------------------------------------------------------------------------
+# Where measurement data goes
+# --------------------------------------------------------------------------
+# Treat this as evidence, not as logs. A capture contains whatever crossed the
+# wire, including payloads. Back it up and restrict it accordingly.
+LT_BASE_DIR="/var/log/lan-tomography"
+
+# Operational log, separate from measurement data.
+#
+# If the unit runs under ProtectSystem=strict and cannot write the default,
+# set this to a writable path AND export it before the tool sources the
+# library. Getting this wrong fails silently: the tool looks healthy and logs
+# nothing, which is the worst of both.
+#LT_LOG_FILE="/var/log/lan-tomography/lan-tomography.log"
+
+# --------------------------------------------------------------------------
+# This probe
+# --------------------------------------------------------------------------
+# Interface to capture on. Differs per host - that is the point of a
+# distributed measurement, not an inconvenience.
+LT_IFACE="eth0"
+
+# How this probe names itself in filenames and reports. Must be unique across
+# probes, otherwise two probes overwrite each other's evidence.
+LT_NODE_NAME="probe1"
+
+# --------------------------------------------------------------------------
+# Switch polling (SNMPv2c, read-only)
+# --------------------------------------------------------------------------
+# The switch whose port counters and forwarding database get polled. Usually
+# the most central managed device you can reach - see
+# docs/explanation/target-matrix.md on choosing it.
+LT_SWITCH_IP="192.0.2.2"
+
+# Read-only community. Prefer putting it in LT_SECRETS below rather than here,
+# especially if this file ends up in a configuration-management repository.
+#LT_SNMP_COMMUNITY="public"
+
+# --------------------------------------------------------------------------
+# Frame capture and keeping captures on an event
+# --------------------------------------------------------------------------
+# Daily capture profiles (loop-detect, roaming) have NO disk cap unless this
+# is set. Left unset on purpose: these files are evidence, and a tool that
+# quietly deletes evidence to save space is worse than a full disk, which at
+# least announces itself. Measure your own volume before deciding - the
+# profiles differ by three orders of magnitude.
+#LT_PCAP_RETENTION_DAYS=21
+
+# Broadcast OR multicast frames per interval that make flood-capture.sh copy
+# the ring out before it is overwritten. Far below LT_FLOOD_MIN on purpose:
+# one- and two-second bursts stay under a per-minute flood definition and are
+# still real events.
+#LT_KEEP_THRESHOLD=1000
+
+# Kept captures are deleted after this many days. Unlike the daily profiles
+# this has a default, because it is a copy of an already bounded ring.
+#LT_KEEP_RETENTION_DAYS=14
+
+# Which capture profile acts as the second trigger, and how to read it.
+#LT_PRECURSOR_NAME="roaming"
+#LT_PRECURSOR_FILTER="ether proto 0x890d"
+#LT_PRECURSOR_GROUP_S=300
+
+# --------------------------------------------------------------------------
+# Credentials
+# --------------------------------------------------------------------------
+# File holding secrets as KEY=value lines. Read line by line, never sourced -
+# sourcing an operator-supplied file executes whatever is in it.
+#
+# Keep it outside this repository. chmod 600.
+#
+# Recognised keys:
+#   LT_SNMP_COMMUNITY   read-only SNMP community
+#   LT_SMB_USER         for src/contrib/ only
+#   LT_SMB_PASSWORD     for src/contrib/ only
+#LT_SECRETS="/etc/lan-tomography/secrets"
+
+# --------------------------------------------------------------------------
+# Windows event logs (src/contrib/ only)
+# --------------------------------------------------------------------------
+# Host whose event logs evtx-peek.py reads, and the domain or workgroup to
+# authenticate against. Leave the domain empty for a local account.
+#
+# Reading C$ needs a privileged account. Put user and password in LT_SECRETS
+# above, not here.
+#LT_SMB_HOST="192.0.2.20"
+#LT_SMB_DOMAIN=""
+
+# --------------------------------------------------------------------------
+# Alerting
+# --------------------------------------------------------------------------
+# Command receiving alerts: subject as $1, body on stdin. This repository
+# ships no mailer on purpose - what happens with an alert is your decision.
+#
+# Examples:
+#   LT_ALERT_CMD="/usr/local/bin/notify-msmtp"
+#   LT_ALERT_CMD="logger -t lan-tomography"
+#   LT_ALERT_CMD="/usr/bin/ntfy publish mytopic"
+#
+# Unset means alerts go to the log and the journal and nowhere else.
+#LT_ALERT_CMD=""
+
+# Cooldown in seconds for repeated alerts of the same kind. A flapping link
+# would otherwise alert every poll cycle, and an operator who mutes the
+# channel loses the next real alert with it.
+LT_ALERT_COOLDOWN=3600
+
+# --------------------------------------------------------------------------
+# Measurement parameters
+# --------------------------------------------------------------------------
+# Seconds between ICMP echo requests per target.
+LT_PING_INTERVAL=1
+
+# Packet-rate sampling interval in seconds. The timestamp written to the
+# pktrate log is the END of this interval, not its start - see
+# docs/reference/log-formats.md before doing arithmetic on it.
+LT_PKTRATE_INTERVAL=5
+
+# --------------------------------------------------------------------------
+# Event-watch thresholds
+# --------------------------------------------------------------------------
+# These are the numbers that decide what counts as an event, and they are the
+# most site-specific values in this repository. The defaults below come from
+# one campaign on one network; deriving your own is described in
+# docs/explanation/target-matrix.md.
+#
+# Derive them, do not copy them. A threshold taken from somebody else's
+# network reports either everything or nothing.
+
+# Broadcast frames per LT_PKTRATE_INTERVAL that count as a flood.
+LT_FLOOD_MIN=10000
+
+# Broadcast frames per interval that count as a surge (the smaller precursor).
+# On the network these defaults come from, quiet periods sat at a median of
+# about 100 per 5 s, so 1500 is roughly fifteen times baseline.
+LT_SURGE_MIN=1500
+
+# Seconds without an ICMP reply before a target counts as down. Single lost
+# packets are normal; Windows guests under load drop them without anything
+# happening in the network.
+LT_GAP_SECONDS=2.5
