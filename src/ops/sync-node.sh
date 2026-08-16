@@ -39,11 +39,16 @@
 #   evidence disappearing here when it rotates there.
 #
 # EXIT CODES
-#   0   pulled, or nothing to pull
+#   0   pulled, or nothing to pull. This includes rsync's own exit 24, "a source
+#       file vanished while transferring": the probe compresses yesterday's log
+#       on its own timer, so a pull that overlaps watches a .log become a
+#       .log.zst mid-flight. Everything else transferred and the archive arrives
+#       on the next pass. Failing the run for that would mean reporting an error
+#       on a schedule, which is how people learn to stop reading the output.
 #   75  node unreachable - transient, the next run catches up. The unit carries
 #       SuccessExitStatus=75, so a probe that is briefly down does not leave a
 #       permanently failed unit that people learn to ignore.
-#   1   a transfer failed
+#   1   a transfer failed. The rsync exit code is named in the log line.
 
 set -uo pipefail
 
@@ -97,12 +102,25 @@ main() {
         }
 
         # Text logs only, compressed archives included. No --delete: see header.
-        if rsync -az --timeout=60 "${args[@]}" \
-                 --include='*/' --include='*.log' --include='*.log.zst' --exclude='*' \
-                 "${NODE}:${REMOTE_BASE}/${dir}/" "${LOCAL_BASE}/${dir}/" 2>/dev/null; then
+        local rsync_rc=0
+        rsync -az --timeout=60 "${args[@]}" \
+              --include='*/' --include='*.log' --include='*.log.zst' --exclude='*' \
+              "${NODE}:${REMOTE_BASE}/${dir}/" "${LOCAL_BASE}/${dir}/" 2>/dev/null \
+              || rsync_rc=$?
+
+        # 24 is "a source file vanished while transferring", and this project
+        # produces it in normal operation: the probe runs lt-compress-logs on
+        # its own timer, so a pull that overlaps it watches yesterday's .log
+        # turn into a .log.zst mid-flight. Everything else transferred, and the
+        # archive arrives on the next pass. Treating it as a failure means the
+        # unit reports an error on a schedule, which is how people learn to
+        # stop reading its output.
+        if (( rsync_rc == 24 )); then
+            log_info "$LOG_PREFIX ${dir}/ pulled from $NODE (a file was compressed mid-transfer)"
+        elif (( rsync_rc == 0 )); then
             log_info "$LOG_PREFIX ${dir}/ pulled from $NODE"
         else
-            log_error "$LOG_PREFIX rsync of ${dir}/ from $NODE failed"
+            log_error "$LOG_PREFIX rsync of ${dir}/ from $NODE failed (exit ${rsync_rc})"
             rc=1
         fi
     done

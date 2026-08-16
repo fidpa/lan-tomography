@@ -308,6 +308,24 @@ def test_log_files_does_not_count_the_same_day_twice(correlate, tmp_path):
     assert found[0].name == "gw-2026-08-04.log"
 
 
+def test_log_files_ignores_partial_archives(correlate, tmp_path):
+    """A half-written archive must not be read as a day.
+
+    compress-logs.sh writes to "<name>.zst.partial" and renames only after the
+    archive verifies, so that an interrupted run cannot leave a truncated file
+    under the name a reader looks for (pitfall B10). That protection depends on
+    the suffix falling outside both globs here: the file ends in ".partial",
+    not ".zst", so neither pattern matches it. Pick a suffix that keeps the
+    .zst ending and the guarantee is gone, silently.
+    """
+    write_log(tmp_path, "gw", "2026-08-05", [reply(T0, 1)])
+    (tmp_path / "gw-2026-08-04.log.zst.partial").write_bytes(b"\x28\xb5\x2f\xfd truncated")
+
+    found = correlate.log_files(tmp_path, "gw-*.log")
+
+    assert [p.name for p in found] == ["gw-2026-08-05.log"]
+
+
 @pytest.mark.skipif(shutil.which("zstd") is None, reason="zstd not installed")
 def test_read_log_returns_the_same_compressed_or_not(correlate, tmp_path):
     """read_log must deliver both forms transparently."""

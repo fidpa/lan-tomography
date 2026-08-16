@@ -26,6 +26,15 @@
 #   skips archived days, and the analysis then runs on less data with no error
 #   and no exit code. See log_files() in src/analyze/correlate.py.
 #
+# THE SECOND RULE
+#   An archive takes its final name only once it verifies. Until then it is
+#   called <name>.zst.partial, a suffix nothing globs for. This is the only
+#   routine step that deletes measurement data on purpose, so an interrupted
+#   run must not be able to leave something that looks like a finished archive:
+#   the next run would skip that day forever with "archive already exists", and
+#   the .log beside it would eventually be tidied away as redundant. Leftover
+#   .partial files are cleared at the start of each run. See pitfall B10.
+#
 # INVOCATION
 #   compress-logs.sh             compress completed days
 #   compress-logs.sh --dry-run   show what would happen, change nothing
@@ -58,6 +67,12 @@ readonly ALERT_COOLDOWN="${LT_ALERT_COOLDOWN:-3600}"
 # Subdirectories holding daily files worth compressing.
 readonly -a DATA_DIRS=(ping l2 pktrate tcp)
 
+# Name an archive carries while it is being written. Deliberately not ending in
+# .zst, so that neither the skip check in compress_one() nor log_files() in
+# correlate.py nor sync-node.sh's rsync filter can mistake a half-written
+# archive for a finished one.
+readonly PARTIAL_SUFFIX=".zst.partial"
+
 is_open() {
     # A file still held open by a running process must not be touched.
     # lsof is not installed everywhere; /proc is, on any Linux this runs on.
@@ -73,6 +88,7 @@ is_open() {
 
 compress_one() {
     local file="$1"
+    local tmp="${file}${PARTIAL_SUFFIX}"
 
     if [[ -f "${file}.zst" ]]; then
         log_info "$LOG_PREFIX archive already exists, skipped: $(basename "$file")"
@@ -90,16 +106,26 @@ compress_one() {
     # existed, the source was gone, and the archive did not read back. `zstd -t`
     # between the two steps is what makes the deletion safe, and it is the
     # entire point of this function.
-    if ! zstd -q "$file" 2>/dev/null; then
+    #
+    # The archive is written under a name nothing looks for, and only takes its
+    # real name once it verifies. A run killed mid-compression - a reboot, a
+    # dropped ssh session, systemd's TimeoutStartSec - otherwise leaves a
+    # truncated .log.zst under the final name, and the check above then skips
+    # that day forever with "archive already exists". The source survives, so
+    # nothing is lost yet; what is lost is the ability to tell the two apart,
+    # and the next person to clear out "redundant" .log files beside their
+    # archives deletes the only readable copy. See pitfall B10.
+    if ! zstd -q -o "$tmp" "$file" 2>/dev/null; then
         log_error "$LOG_PREFIX compression failed: $file"
-        rm -f "${file}.zst"
+        rm -f "$tmp"
         return 1
     fi
-    if ! zstd -q -t "${file}.zst" 2>/dev/null; then
-        log_error "$LOG_PREFIX archive does not verify, source kept: ${file}.zst"
-        rm -f "${file}.zst"
+    if ! zstd -q -t "$tmp" 2>/dev/null; then
+        log_error "$LOG_PREFIX archive does not verify, source kept: $(basename "$file")"
+        rm -f "$tmp"
         return 1
     fi
+    mv -f "$tmp" "${file}.zst"
     rm -f "$file"
     return 0
 }
@@ -126,6 +152,18 @@ main() {
         log_info "$LOG_PREFIX $LT_BASE_DIR does not exist - nothing to do"
         return 0
     fi
+
+    # Leftovers from a run that was killed mid-compression. They never hold
+    # data the source file does not also hold, because the source is removed
+    # only after the archive verifies. Clearing them here, rather than leaving
+    # them to accumulate, is what keeps a partial write from costing disk on
+    # every reboot.
+    local partial leftover=0
+    while IFS= read -r partial; do
+        [[ "$DRY_RUN" == "true" ]] || rm -f "$partial"
+        leftover=$((leftover + 1))
+    done < <(find "$LT_BASE_DIR" -type f -name "*${PARTIAL_SUFFIX}" 2>/dev/null)
+    (( leftover > 0 )) && log_info "$LOG_PREFIX cleared $leftover partial archive(s) from an interrupted run"
 
     local before_mb after_mb
     before_mb=$(du -sm "$LT_BASE_DIR" 2>/dev/null | cut -f1)

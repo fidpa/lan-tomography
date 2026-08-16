@@ -19,6 +19,12 @@ recorded came from misreading a format, not from misreading a network.
   `log_files()` and `read_log()` in `src/analyze/correlate.py`. A plain
   `glob("*.log")` skips archived days **silently**, and the analysis then runs
   on less data with no error and no exit code.
+- A file ending in `.zst.partial` is an archive still being written, or the
+  remains of a compression run that was interrupted. It holds nothing the
+  `.log` beside it does not also hold, and the next `compress-logs.sh` run
+  removes it. Reading tools must ignore it: the suffix exists precisely so
+  that a half-written archive cannot be mistaken for a finished one
+  (pitfall B10).
 
 ---
 

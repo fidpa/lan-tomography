@@ -23,6 +23,47 @@ network, and one network is not enough to call an interface settled.
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-08-16
+
+Two failure modes that only appear once probes compress their own days, which
+is what `install.sh --role node` has been setting up all along. Both were found
+while running this toolkit's ancestor on the network the case study describes.
+
+### Fixed
+
+- **`sync-node.sh` reported a failure on a schedule.** rsync exit code 24 means
+  "a source file vanished while transferring", and this project produces it in
+  normal operation: the probe compresses yesterday's log on its own timer, and
+  a pull that overlaps watches a `.log` become a `.log.zst` mid-flight.
+  Everything else transferred and the archive arrives on the next pass, but the
+  run was logged as `rsync of ping/ from <node> failed` with no exit code shown.
+  A unit that reports an error on a schedule teaches people to stop reading its
+  output, and the overlap cannot be scheduled away: both timers fire relative
+  to boot, on two different machines, so their relative position drifts and
+  eventually coincides. Exit 24 is now logged as what it is; every other
+  non-zero code still fails, and now says which one.
+- **An interrupted compression left an archive nothing would ever replace.**
+  `compress-logs.sh` wrote the archive under its final name, so a run killed
+  mid-compression left a truncated `.log.zst` that the next run skipped with
+  "archive already exists". No data was lost at that point, since the source is
+  removed only after `zstd -t` passes, but the day was never archived again and
+  the pair sat there looking like leftovers, waiting for the next person to
+  delete the `.log` beside its archive. Archives are now written to
+  `<name>.zst.partial`, renamed only after they verify, and leftovers from an
+  interrupted run are cleared at the start of the next one.
+
+### Added
+
+- **Pitfall B10, "An archive that exists is not an archive that reads back"**,
+  the archive-level counterpart to E7, covering why compression writes under a
+  name nothing looks for. Counted again afterwards:
+  `docs/explanation/pitfalls.md` has **47** entries, **20** of which name a
+  test, and every test name in it resolves.
+- **`log_files_ignores_partial_archives`**, pinning the half of B10 that lives
+  in code. The protection depends on `.zst.partial` falling outside both globs
+  in `log_files()`; a suffix that kept the `.zst` ending would remove it
+  without any other symptom.
+
 ## [0.2.1] — 2026-08-10
 
 Documentation only. Three numbers that were wrong, two dependencies that were
@@ -425,7 +466,8 @@ become individually determinable, instead of collecting targets by gut feeling.
   generated from commit messages. Two gates come with it: the workflow fails if
   the section is missing or empty, and if the tag does not match `VERSION`.
 
-[Unreleased]: https://github.com/fidpa/lan-tomography/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/fidpa/lan-tomography/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.2
 [0.2.1]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.1
 [0.2.0]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.0
 [0.1.1]: https://github.com/fidpa/lan-tomography/releases/tag/v0.1.1

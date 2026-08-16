@@ -69,8 +69,8 @@ logic are the same either way.
 - **ARP conflict detection.** One address answered from two MACs produces
   exactly the damage pattern of an intermittent fault, and both devices report
   themselves healthy.
-- **A pitfalls catalogue with tests.** 46 documented ways these measurements
-  mislead; 19 of them pinned by a named test.
+- **A pitfalls catalogue with tests.** 47 documented ways these measurements
+  mislead; 20 of them pinned by a named test.
 - **Synthetic sample data.** The analysis is demonstrable end to end without a
   single byte of anyone's real traffic.
 - **Liveness watching.** A dead probe and a healthy network both produce
@@ -132,7 +132,7 @@ repository and the part that saves time.
 
 | | |
 |---|---|
-| [Pitfalls](docs/explanation/pitfalls.md) | 46 ways these measurements mislead |
+| [Pitfalls](docs/explanation/pitfalls.md) | 47 ways these measurements mislead |
 | [The method](docs/explanation/target-matrix.md) | Placing probes, assigning roles, deriving thresholds |
 | [Proving a loop](docs/explanation/proving-a-loop.md) | Three detection methods, and one that was withdrawn |
 | [Case study](docs/explanation/case-study.md) | The investigation this grew out of, with its corrections and its unresolved ending |

@@ -146,6 +146,40 @@ there twice and gets counted twice.
 
 *Tests: `log_files_finds_compressed_days`, `log_files_does_not_count_the_same_day_twice`*
 
+### B10. An archive that exists is not an archive that reads back
+
+Compression is the one routine step that deletes measurement data on purpose,
+so it is the step where an interruption costs the most. Write the archive
+under its final name and a run killed mid-compression - a reboot, a dropped
+ssh session, `TimeoutStartSec` expiring on a day that grew unusually large -
+leaves a truncated `.log.zst` that is indistinguishable, by its name, from a
+finished one.
+
+Nothing breaks that day. The source file is still there, because it is removed
+only after the archive verifies, and `log_files()` prefers the uncompressed
+copy anyway. What breaks is later: the next compression run sees the archive,
+says "archive already exists, skipped", and skips that day for good. The pair
+sits there indefinitely, looking like a day that was archived and never
+cleaned up. The next person to tidy away the "redundant" `.log` beside its
+archive deletes the only readable copy, and the loss surfaces months later
+when someone tries to read the day.
+
+This is [E7](#e7-a-capture-file-that-exists-is-not-a-capture-that-ran) applied
+to the archive rather than the capture, and the fix is the same shape:
+`compress-logs.sh` writes to `<name>.zst.partial`, verifies with `zstd -t`,
+and only then renames. A name nothing looks for cannot be mistaken for a
+result, and leftovers are cleared at the start of the next run.
+
+The same reasoning covers the reverse temptation. `zstd --rm` compresses and
+deletes in one invocation, on nothing but zstd's own report of its own run,
+which is how a measurement day was lost here once.
+
+The suffix has to fall outside what readers glob for, which is why it is
+`.zst.partial` and not `.partial.zst`: `log_files()` matches `*.log` and
+`*.log.zst`, and a name ending in `.zst` would be picked up as a day.
+
+*Tests: `log_files_ignores_partial_archives`*
+
 ---
 
 ## C. Reading the packet-rate logs

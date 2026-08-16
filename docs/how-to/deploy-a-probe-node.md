@@ -71,6 +71,12 @@ rsync -az probe2:/var/log/lan-tomography/targets.conf \
 uncompressed and sit next to its own archive, and both would be counted. The
 analysis handles that case, but only because it was hit once.
 
+**Exit code 24 is not a failure here.** It means a source file vanished
+mid-transfer, and the probe compresses yesterday's log on its own timer, so a
+pull that overlaps sees exactly that. Everything else transferred and the
+archive arrives on the next pass. `src/ops/sync-node.sh` treats 24 as success
+for this reason; a hand-run `rsync` will still print it.
+
 **Bring the matrix with the data.** `probe-node.sh` writes its own
 `targets.conf` into its base directory for this; `src/ops/sync-node.sh` pulls
 it automatically. Without it, `correlate.py` stops rather than analyse this

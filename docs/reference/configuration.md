@@ -174,6 +174,20 @@ housekeeping flag is not a trade worth making. The cost is that a day archived
 on the probe can come back uncompressed and sit next to its own archive, which
 `log_files()` in `correlate.py` handles by preferring the uncompressed copy.
 
+A pull that overlaps the probe's own compression run exits with rsync code 24,
+"a source file vanished while transferring": yesterday's `.log` became a
+`.log.zst` between the file list and the transfer. Everything else was
+transferred and the archive arrives on the next pass, so `sync-node.sh` logs
+this and returns success. Every other non-zero code fails the run and is named
+in the message.
+
+The overlap cannot be scheduled away. `lt-compress-logs.timer` and
+`lt-sync-node@.timer` both fire relative to boot (`OnBootSec` plus
+`OnUnitActiveSec`), on two different machines, and each run's duration shifts
+the next one, so their relative position drifts and eventually coincides. There
+is no pair of clock times to separate. A unit that reports an error on a
+schedule is worse than one that explains a harmless outcome.
+
 ## Event watching
 
 | Variable | Default | Notes |
