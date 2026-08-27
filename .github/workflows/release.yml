@@ -23,12 +23,14 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
 
-          # Cut from this version's heading to the next "## [" heading.
+          # Cut from this version's heading to the next "## [" heading. The
+          # sed drops the leading blank line the cut leaves behind, so the
+          # body is byte-identical to the section rather than off by one line.
           awk -v v="$version" '
             $0 ~ "^## \\[" v "\\]" { found = 1; next }
             /^## \[/               { found = 0 }
             found
-          ' CHANGELOG.md > /tmp/notes.md
+          ' CHANGELOG.md | sed -e '/./,$!d' > /tmp/notes.md
 
           # An empty body would publish a release that says nothing, and
           # nobody notices until somebody opens the page. Fail instead.

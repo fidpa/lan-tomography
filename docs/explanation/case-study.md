@@ -365,7 +365,7 @@ the positive control: on Day 1 at 15:22:53 the hypervisor's physical NIC lost li
 for 59 seconds and the log recorded it, while 14 sessions dropped. The host *does*
 log these events. The same reasoning disqualified another source entirely. SNMP
 counters from `sw-floor` were missing for **12 of 18 flood minutes** and for only
-31 of the remaining 1,114 (p = 2.8·10⁻¹⁴), because the switch stops answering SNMP
+31 of the remaining 1,114 (p = 2.8e-14), because the switch stops answering SNMP
 under broadcast load, so an empty discard result at a wave minute is a blind spot
 rather than an acquittal
 ([D2](pitfalls.md#d2-snmp-counters-go-blind-exactly-when-it-matters)).

@@ -23,6 +23,27 @@ network, and one network is not enough to call an interface settled.
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-08-28: The SNMP blind-spot p-value reads the same in every document
+
+Two follow-ups to the editorial pass in 0.2.3, both of them cases where one
+value was written two ways.
+
+### Fixed
+
+- **The p-value behind the SNMP blind-spot finding is written the same way in
+  all three places that cite it.** `docs/explanation/case-study.md` set the
+  exponent as a superscript while `docs/explanation/pitfalls.md` and
+  `docs/reference/log-formats.md` wrote `p = 2.8e-14`. A reader comparing the
+  case study against the pitfall it produced saw two notations for one measured
+  value, and the superscript form does not survive a copy into a terminal or a
+  plain-text note. The value itself is unchanged.
+- **A release body starts where its changelog section starts.** The `awk` in
+  `release.yml` left the blank line that follows the version heading, so every
+  body the CI produced began one line lower than the section it was cut from.
+  GitHub renders both the same; a byte comparison of body against section does
+  not, and that comparison is how the two are kept in step. `sed -e '/./,$!d'`
+  now drops the line in the workflow rather than by hand afterwards.
+
 ## [0.2.3] - 2026-08-28: Release titles come from the changelog, and this file is ASCII
 
 An editorial pass over this file and the release pages it feeds. No tool, no
@@ -501,7 +522,8 @@ become individually determinable, instead of collecting targets by gut feeling.
   generated from commit messages. Two gates come with it: the workflow fails if
   the section is missing or empty, and if the tag does not match `VERSION`.
 
-[Unreleased]: https://github.com/fidpa/lan-tomography/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/fidpa/lan-tomography/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.4
 [0.2.3]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.3
 [0.2.2]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.2
 [0.2.1]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.1
