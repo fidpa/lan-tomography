@@ -33,12 +33,29 @@ jobs:
           # An empty body would publish a release that says nothing, and
           # nobody notices until somebody opens the page. Fail instead.
           if [ ! -s /tmp/notes.md ]; then
-            echo "::error::no CHANGELOG section for ${version} - expected a heading '## [${version}] — YYYY-MM-DD'"
+            echo "::error::no CHANGELOG section for ${version} - expected a heading '## [${version}] - YYYY-MM-DD: headline'"
             exit 1
           fi
 
           echo "Extracted $(wc -l < /tmp/notes.md) lines for ${version}"
           head -5 /tmp/notes.md
+
+          # The release title comes from the same heading the body was cut
+          # from, so the two cannot drift. Without it the action falls back to
+          # the tag name, and the release list shows the version twice.
+          headline=$(awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" {
+              if (match($0, /- [0-9]{4}-[0-9]{2}-[0-9]{2}: /)) {
+                print substr($0, RSTART + RLENGTH)
+              }
+              exit
+            }
+          ' CHANGELOG.md)
+          if [ -n "$headline" ]; then
+            echo "title=v${version}: ${headline}" >> "$GITHUB_OUTPUT"
+          else
+            echo "title=v${version}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Verify the tag matches VERSION
         run: |
@@ -52,6 +69,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v3
         with:
+          name: ${{ steps.notes.outputs.title }}
           body_path: /tmp/notes.md
           make_latest: true
         env:
