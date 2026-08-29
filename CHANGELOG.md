@@ -23,6 +23,52 @@ network, and one network is not enough to call an interface settled.
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-08-29: The README says where each of its numbers comes from
+
+Documentation only, and a single pass over `README.md`: every claim in it was
+looked up in the code rather than remembered, and the prose was read once more
+for the shapes a language model leaves behind. One number did not survive the
+first half; the rest of the changes are editorial.
+
+### Fixed
+
+- **"a dependency-free SNMP client of 135 lines" was not reproducible.** No
+  counting rule gives 135 for `src/lib/snmp.py`: `wc -l` says 274, dropping
+  blank and comment lines gives 199, counting statements gives 130. The file
+  has not changed since v0.1.0, so the figure had been unmeasurable since the
+  day it was written, in a repository whose whole argument is that a number
+  without a stated origin is worth nothing. The feature line now cites the
+  command it comes from, `wc -l src/lib/snmp.py`, and gives the BER encoder and
+  decoder as about half of the file, which holds under every counting rule
+  tried.
+
+### Changed
+
+- **The pitfall count says what it counts.** "47 documented ways these
+  measurements mislead" is now "47 entries in `docs/explanation/pitfalls.md`",
+  and it links there. The number was correct; what was missing was the unit,
+  and a reader who wants to recount should not have to guess whether headings,
+  paragraphs or tests were being counted.
+- **The three key concepts link to the chapter or pitfall they compress.** Rank
+  points at the worked example in `docs/explanation/target-matrix.md`, the
+  switch-management-IP concept at D1, the `None`-versus-zero concept at B8, and
+  the known limitation about blind counters at D2. Each of the four was a
+  paraphrase standing on its own, which is how two texts start to disagree.
+- **"Every analysis function returns `None`" names its evidence.** An absolute
+  claim was carrying no proof; it is now four tests, three in the ping analysis
+  and one in the switch report, with
+  `missing_log_file_yields_none_not_zero_loss` given as the one to read first.
+- **The standard-library claim names the one file that breaks it.**
+  `src/contrib/evtx-peek.py` is the only file under `src/` importing anything
+  outside the standard library. Saying so is stronger than the blanket
+  statement, because it can be checked.
+- **The known-limitations block sits directly after the feature list.** It used
+  to stand behind the entire middle of the document, which is where limitations
+  go when nobody is meant to read them.
+- **Two prose repairs.** The `## The problem` heading was a form to fill in
+  rather than an argument, and now names what it argues against: Wireshark,
+  LibreNMS, ntopng. "You simply start further along" lost the filler word.
+
 ## [0.2.4] - 2026-08-28: The SNMP blind-spot p-value reads the same in every document
 
 Two follow-ups to the editorial pass in 0.2.3, both of them cases where one
@@ -522,7 +568,8 @@ become individually determinable, instead of collecting targets by gut feeling.
   generated from commit messages. Two gates come with it: the workflow fails if
   the section is missing or empty, and if the tag does not match `VERSION`.
 
-[Unreleased]: https://github.com/fidpa/lan-tomography/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/fidpa/lan-tomography/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.5
 [0.2.4]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.4
 [0.2.3]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.3
 [0.2.2]: https://github.com/fidpa/lan-tomography/releases/tag/v0.2.2
